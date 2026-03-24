@@ -230,19 +230,27 @@ def stream_chat(message: str, history: list, model_override: str | None):
 
 # ─── HTTP SERVER ──────────────────────────────────────────────────────────────
 
+_CLIENT_GONE = (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)
+
 class Handler(http.server.BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         pass  # silence default access logs
 
+    def handle_error(self):
+        pass  # swallow connection-reset noise printed by socketserver
+
     def _json(self, data: dict, status: int = 200):
         body = json.dumps(data).encode()
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(body)
+        except _CLIENT_GONE:
+            pass
 
     def _sse_headers(self):
         self.send_response(200)
@@ -260,24 +268,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        if self.path in ("/", "/index.html"):
-            body = HTML.encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+        try:
+            if self.path in ("/", "/index.html"):
+                body = HTML.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
 
-        elif self.path == "/api/status":
-            self._json(build_status())
+            elif self.path == "/api/status":
+                self._json(build_status())
 
-        elif self.path == "/api/models":
-            ol = ollama_models()
-            self._json(ol)
+            elif self.path == "/api/models":
+                self._json(ollama_models())
 
-        else:
-            self.send_response(404)
-            self.end_headers()
+            else:
+                self.send_response(404)
+                self.end_headers()
+        except _CLIENT_GONE:
+            pass
 
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
