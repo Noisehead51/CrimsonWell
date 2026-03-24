@@ -1,241 +1,179 @@
-# Production Local AI Stack
+# CrimsonWell — Local AI for Everyone
 
-## Quick Start
-
-```bash
-# Windows
-start.bat
-
-# Linux/Mac
-chmod +x start.sh && ./start.sh
-```
-
-Then open: **http://localhost:3000**
+> **I built this for my own setup (AMD RX 6600 XT, Windows 11).**
+> It works on any GPU or CPU though — AMD, NVIDIA, Intel Arc, or pure CPU.
+> **Feel free to use it, fork it, and contribute.** PRs welcome.
 
 ---
 
-## What You Get
+## What is it?
 
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| **Ollama** | 0.18.2+ | Local LLM runtime with GPU acceleration |
-| **Open WebUI** | v0.6.35+ | Production-grade web UI with agents |
-| **Qwen3.5:9B** | Latest | Best agent model (6GB, ~6B active params) |
-| **Mistral** | Latest | Fast fallback model (3.8GB) |
+CrimsonWell is a noob-proof local AI stack that auto-routes your requests to the right model and agent — no manual configuration needed. Just describe what you want and it figures out the rest.
+
+**Key features:**
+- **Auto intent routing** — detects if you want code, 3D scripts, research, writing, math, or an agent task and picks the right AI persona + model automatically
+- **VRAM-aware model selection** — never crashes from OOM; picks the best model that fits your GPU
+- **AMD Vulkan first** — works on ALL AMD GPUs, even without ROCm (RX 400 series and up)
+- **Streaming responses** — see tokens as they're generated, no waiting for full replies
+- **Autonomous agent mode** — tell it to *do* something and it uses tools to actually execute it
+- **Usage learner** — tracks which models you use most and pre-warms them on startup
+- **Skill scanner** — drop a `.py` file in `skills/` and it auto-registers as a new capability
+- **Zero cloud dependency** — 100% local, nothing leaves your machine
+
+---
+
+## Quick Start
+
+### 1. Install requirements
+- **Python 3.9+** → [python.org/downloads](https://www.python.org/downloads/)
+  Check "Add to PATH" during install
+- **Ollama** → [ollama.com/download](https://ollama.com/download)
+
+### 2. First-time setup
+```
+Double-click SETUP.bat
+```
+This detects your GPU, recommends the right model for your VRAM, and downloads it.
+
+### 3. Launch
+```
+Double-click LAUNCH.bat
+```
+Opens `http://localhost:3000` automatically.
+
+---
+
+## GPU Support
+
+| GPU Type | Backend | Notes |
+|----------|---------|-------|
+| AMD RX 400–9000 series | Vulkan | Auto-detected, no ROCm needed |
+| NVIDIA GTX/RTX | CUDA | Auto-detected |
+| Intel Arc / Iris | Vulkan | Auto-detected |
+| No GPU / CPU only | CPU | Works, use small models |
+
+**For AMD GPUs:** Ollama uses Vulkan automatically on Windows. If your GPU isn't detected or runs on CPU, try adding `HSA_OVERRIDE_GFX_VERSION=10.3.0` to LAUNCH.bat (uncomment the line for your GPU generation).
+
+---
+
+## Model Guide (What to download)
+
+| Your VRAM | Recommended | Why |
+|-----------|-------------|-----|
+| ≤2GB / CPU | `phi3:mini` | Tiny, surprisingly capable |
+| 4GB | `llama3.2:3b` | Good balance |
+| 6GB | `mistral:7b` | Fast all-rounder |
+| 8GB | `llama3.1:8b` | Best quality for 8GB |
+| 8GB (coding) | `qwen2.5-coder:7b` | Best coding model |
+| 8GB (reasoning) | `deepseek-r1:8b` | Best for research/math |
+
+To download a model: `ollama pull <model-name>`
+Or click it in the CrimsonWell sidebar.
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────┐
-│      Open WebUI (3000)              │
-│  - Chat interface                   │
-│  - Agent orchestration              │
-│  - Pipelines (custom tools)         │
-│  - RAG support                      │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────┴──────────────────────┐
-│      Ollama (11434)                 │
-│  - Model inference                  │
-│  - GPU acceleration (AMD/NVIDIA)    │
-│  - Model management                 │
-└─────────────────────────────────────┘
+User input
+    │
+    ▼
+Intent Router          ← keyword-based, <1ms
+    │ (intent: code / 3d / research / math / write / agent / chat)
+    ▼
+VRAM Planner           ← checks GPU VRAM, picks best installed model
+    │ (model: qwen2.5-coder:7b)
+    ▼
+Ollama (streaming)     ← local inference, your GPU
+    │
+    ▼
+UI (streaming tokens)
+
+Usage Learner          ← runs in background, pre-warms top model on next startup
+Skill Scanner          ← scans skills/ on startup, auto-registers new skills
 ```
 
 ---
 
-## Performance Numbers (2026 Latest)
+## Project Structure
 
-| Metric | Value |
-|--------|-------|
-| **Qwen3.5:9B** | ~30-40 tokens/sec (RTX 4090) |
-| **8GB VRAM card** | 40+ tokens/sec with Q4_K_M |
-| **Context window** | 32K (Qwen3.5:9B) |
-| **Agent response** | 2-5 sec (typical) |
-
-Sources:
-- [Ollama GPU Optimization 2026](https://dasroot.net/posts/2026/03/ollama-gpu-optimization-configuration-2026/)
-- [Best LLMs for 8GB VRAM](https://medium.com/@rosgluk/best-llms-for-ollama-on-16gb-vram-gpu-c1bf6c3a10be)
-- [Qwen 3.5 Benchmarks](https://localaimaster.com/blog/small-language-models-guide-2026)
-
----
-
-## Security Features
-
-✅ **Enabled by Default:**
-- Secret key generation (auto)
-- API key authentication
-- No signup allowed (admin only)
-- Encrypted database support
-- Multi-worker deployment ready
-
-⚠️ **Before Production:**
-1. Change `WEBUI_SECRET_KEY` in `.env.prod`
-2. Set strong admin password first login
-3. Configure firewall rules
-4. Use reverse proxy (nginx/Caddy) for SSL
-5. Never expose to internet without auth
-
-### Critical Security Fix
-⚠️ **IMPORTANT**: Open WebUI v0.6.34 and earlier has a critical RCE vulnerability. Your setup uses **v0.6.35+** which fixes this. Keep updated!
-
-Sources:
-- [Open WebUI Security Docs](https://docs.openwebui.com/security/)
-- [CVE Alert - v0.6.34 RCE](https://www.csoonline.com/article/4113139/open-webui-bug-turns-free-model-into-an-enterprise-backdoor.html)
+```
+CrimsonWell/
+├── crimsonwell.py        # Main server + embedded UI (start here)
+├── agent_engine.py       # Autonomous ReAct agent with tool use
+├── core/
+│   ├── gpu_detect.py     # GPU/VRAM detection (AMD/NVIDIA/Intel/CPU)
+│   ├── vram_planner.py   # Model catalog + VRAM-aware selection
+│   ├── intent_router.py  # Fast keyword-based intent routing
+│   └── usage_learner.py  # Usage tracking + model pre-warming
+├── skills/               # Drop .py files here to add new skills
+├── LAUNCH.bat            # One-click launcher (auto GPU setup)
+├── SETUP.bat             # First-time setup wizard
+└── README.md
+```
 
 ---
 
-## Usage
+## Adding Skills
 
-### Chat
-1. Go to http://localhost:3000
-2. Select **qwen3.5:9b** from model dropdown
-3. Type and chat
+Drop a `.py` file in the `skills/` folder. CrimsonWell scans it on startup and registers it automatically. No config needed.
 
-### Run an Agent
-1. In Open WebUI, click "+" → "Agent"
-2. Name it (e.g., "Research Agent")
-3. Assign tools (Web search, calculator, etc.)
-4. Start chatting
-
-### Custom Tools (Pipelines)
-Place Python files in `pipelines/` - Open WebUI loads them automatically.
-
-Example pipeline:
+Example skill structure (coming soon — PRs welcome):
 ```python
-# pipelines/calculator.py
-class Calculator:
-    def __init__(self):
-        self.name = "calculator"
-        self.description = "Evaluate math expressions"
+# skills/image_gen.py
+SKILL_NAME = "Image Generation"
+SKILL_ICON = "🎨"
+KEYWORDS = ["generate image", "draw", "stable diffusion", "image of"]
 
-    async def __call__(self, expression: str) -> str:
-        return str(eval(expression))
+def handle(message: str) -> str:
+    # Your skill logic here
+    ...
 ```
 
 ---
 
-## Commands
+## Contributing
 
-| Command | Purpose |
-|---------|---------|
-| `./start.sh` | Start everything |
-| `./stop.sh` | Stop everything |
-| `./gpu-check.sh` | Health check |
-| `./logs.sh ollama` | View Ollama logs |
-| `./logs.sh webui` | View Open WebUI logs |
-| `./logs.sh errors` | Show errors only |
+This project is open to contributions of any size:
 
----
+- **New skills** — image gen, voice, web scraping, file management
+- **More GPU support** — Linux ROCm setup, macOS Metal
+- **Better UI** — themes, mobile improvements, conversation history
+- **More models** — add entries to `core/vram_planner.py`'s `MODEL_CATALOG`
+- **Bug fixes** — always welcome
 
-## Model Management
+**To contribute:**
+1. Fork the repo
+2. Create a branch: `git checkout -b feature/your-feature`
+3. Make your changes
+4. Submit a PR with a short description of what you changed and why
 
-### Pull a New Model
-```bash
-docker exec ollama ollama pull llama2:13b
-```
-
-### View Models
-```bash
-docker exec ollama ollama list
-```
-
-### Memory Requirements
-- **Qwen3.5:4B**: 2.5GB
-- **Qwen3.5:7B**: 4.5GB
-- **Qwen3.5:9B**: 6GB ← **Recommended**
-- **Llama2:13B**: 8GB
+No contribution is too small. Even fixing a typo helps.
 
 ---
 
 ## Troubleshooting
 
-### "Connection refused" on startup
-```bash
-# Wait a bit longer, services are starting
-sleep 30 && ./gpu-check.sh
-```
+**"Ollama not running" alert**
+→ Run LAUNCH.bat, or open a terminal and run: `ollama serve`
 
-### High memory usage
-```bash
-# See which container is using memory
-docker stats
+**Slow generation / CPU fallback**
+→ Check that your GPU drivers are up to date
+→ For AMD: verify Ollama is using Vulkan in its logs
+→ Try a smaller model (e.g. `llama3.2:3b` instead of `llama3.1:8b`)
 
-# Unload unused models
-docker exec ollama ollama rm modelname
-```
+**"No models installed"**
+→ Run SETUP.bat, or: `ollama pull llama3.2:3b`
 
-### GPU not being used
-Check logs:
-```bash
-./logs.sh ollama | grep -i "gpu\|cuda\|rocm"
-```
-
-For AMD GPU, may need:
-```bash
-# In docker-compose.yml, set:
-HSA_OVERRIDE_GFX_VERSION: gfx90a  # Adjust for your GPU
-```
+**Port 3000 already in use**
+→ Change `PORT = 3000` in `crimsonwell.py` to another port (e.g. `3001`)
 
 ---
 
-## Production Deployment
+## License
 
-For production with multiple users/GPUs:
-
-1. **Use PostgreSQL** instead of SQLite:
-   ```yaml
-   # docker-compose.yml
-   postgres:
-     image: postgres:16-alpine
-     environment:
-       POSTGRES_DB: webui
-   ```
-
-2. **Enable reverse proxy** (nginx/Caddy with SSL)
-
-3. **Configure LDAP/OIDC** for SSO
-
-4. **Set resource limits**:
-   ```yaml
-   services:
-     ollama:
-       deploy:
-         resources:
-           limits:
-             cpus: '4'
-             memory: 16G
-   ```
-
-5. **Monitor with Prometheus/Grafana**
+MIT — do whatever you want with it.
 
 ---
 
-## Latest Updates (March 2026)
-
-- ✅ Ollama v0.18.2+ with improved model scheduling
-- ✅ Open WebUI v0.6.35+ (critical security fix)
-- ✅ Qwen3.5 series (small/medium/large)
-- ✅ AMD ROCm v7 support
-- ✅ Reduced vLLM vs Ollama performance gap to ~15%
-
-Sources:
-- [Ollama v0.18 Release Notes](https://ollama.com/blog)
-- [Open WebUI Releases](https://github.com/open-webui/open-webui/releases)
-- [Qwen3.5 Performance Analysis](https://apidog.com/blog/best-qwen-models/)
-
----
-
-## Support
-
-- 🐛 **Issues**: https://github.com/open-webui/open-webui/issues
-- 📚 **Docs**: https://docs.openwebui.com
-- 💬 **Community**: https://openwebui.com/o/agents
-
----
-
-**Status**: Production Ready ✓
-**Last Updated**: March 2026
-**Security**: v0.6.35+ (patched)
+*Built on Windows 11, AMD RX 6600 XT, 16GB RAM. Your mileage may vary on other setups — that's what the issues tab is for.*

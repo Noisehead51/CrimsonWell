@@ -13,29 +13,42 @@ from typing import Optional
 
 OLLAMA = "http://localhost:11434"
 
+# ─── DYNAMIC BASE PATHS (no hardcoded usernames) ──────────────────────────────
+_HOME       = os.path.expanduser("~")
+_BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
+_WORKSPACE  = os.path.join(_HOME, ".crimsonwell", "workspace")
+os.makedirs(_WORKSPACE, exist_ok=True)
+
 # ─── PATH HELPERS ─────────────────────────────────────────────────────────────
 
 def _resolve_path(path: str) -> str:
     """Resolve shorthand names and relative paths to full absolute paths."""
     if not path:
-        return r"C:\Users\nickn\local-ai-production"
+        return _WORKSPACE
     path = os.path.expandvars(path.strip())
     if os.path.isabs(path):
         return path
     shortcuts = {
-        "local-ai-production": r"C:\Users\nickn\local-ai-production",
-        "ai-workspace":        r"C:\Users\nickn\ai-workspace",
-        "desktop":             os.path.join(os.environ.get("USERPROFILE",""), "Desktop"),
-        "documents":           os.path.join(os.environ.get("USERPROFILE",""), "Documents"),
-        "downloads":           os.path.join(os.environ.get("USERPROFILE",""), "Downloads"),
-        "ollama":              os.path.join(os.environ.get("USERPROFILE",""), ".ollama"),
+        "workspace":           _WORKSPACE,
+        "crimsonwell":         _BASE_DIR,
+        "desktop":             os.path.join(_HOME, "Desktop"),
+        "documents":           os.path.join(_HOME, "Documents"),
+        "downloads":           os.path.join(_HOME, "Downloads"),
+        "ollama":              os.path.join(_HOME, ".ollama"),
+        # legacy aliases kept for backwards compatibility
+        "local-ai-production": _WORKSPACE,
+        "ai-workspace":        _WORKSPACE,
     }
     key = path.lower().strip("\\/ ")
     if key in shortcuts:
         return shortcuts[key]
-    candidate = os.path.join(r"C:\Users\nickn\local-ai-production", path)
+    candidate = os.path.join(_WORKSPACE, path)
     if os.path.exists(candidate):
         return candidate
+    # Also check CrimsonWell base dir
+    candidate2 = os.path.join(_BASE_DIR, path)
+    if os.path.exists(candidate2):
+        return candidate2
     return path
 
 # ─── TOOL IMPLEMENTATIONS ─────────────────────────────────────────────────────
@@ -47,7 +60,7 @@ def _read_file(path: str) -> str:
     except Exception as e:
         return f"[read_file error] {e}"
 
-def _list_dir(path: str = r"C:\Users\nickn\local-ai-production") -> str:
+def _list_dir(path: str = "") -> str:
     try:
         path = _resolve_path(path)
         entries = os.listdir(path)
@@ -60,7 +73,7 @@ def _list_dir(path: str = r"C:\Users\nickn\local-ai-production") -> str:
     except Exception as e:
         return f"[list_dir error] {e}"
 
-def _search_files(pattern: str, directory: str = r"C:\Users\nickn\local-ai-production") -> str:
+def _search_files(pattern: str, directory: str = "") -> str:
     try:
         directory = _resolve_path(directory)
         results = glob.glob(os.path.join(directory, "**", pattern), recursive=True)
@@ -110,15 +123,17 @@ def _run_command(cmd: str) -> str:
 def _write_file(path: str, content: str) -> str:
     path = os.path.expandvars(os.path.abspath(path))
     safe_roots = [
-        os.path.abspath(r"C:\Users\nickn\local-ai-production"),
-        os.path.abspath(r"C:\Users\nickn\ai-workspace"),
+        os.path.abspath(_WORKSPACE),
+        os.path.abspath(_BASE_DIR),
+        os.path.abspath(os.path.join(_HOME, "Desktop")),
+        os.path.abspath(os.path.join(_HOME, "Documents")),
     ]
     if not any(path.startswith(r) for r in safe_roots):
         return (
-            f"[BLOCKED] Writes are only allowed inside:\n"
-            f"  C:\\Users\\nickn\\local-ai-production\\\n"
-            f"  C:\\Users\\nickn\\ai-workspace\\\n"
-            f"Requested path was: {path}"
+            f"[BLOCKED] Writes outside safe directories are not allowed.\n"
+            f"Safe directories:\n"
+            + "\n".join(f"  {r}" for r in safe_roots) +
+            f"\nRequested path was: {path}"
         )
     # Back up if file exists
     backup_note = ""
@@ -272,8 +287,8 @@ def _calculate(expression: str) -> str:
         return f"[calculate error] {e}"
 
 def _save_note(filename: str, content: str) -> str:
-    """Save a note or result to ai-workspace."""
-    workspace = r"C:\Users\nickn\ai-workspace"
+    """Save a note or result to the crimsonwell workspace."""
+    workspace = _WORKSPACE
     os.makedirs(workspace, exist_ok=True)
     # Only allow safe filenames
     import re
@@ -405,11 +420,11 @@ TOOL: [exact tool name]
 INPUT: {{"arg": "value"}}
 
 PATH SHORTCUTS (use these exact strings as the path argument):
-- "local-ai-production" -> C:\\Users\\nickn\\local-ai-production  (AI studio files)
-- "ai-workspace"        -> C:\\Users\\nickn\\ai-workspace          (output/workspace)
-- "desktop"             -> C:\\Users\\nickn\\Desktop
-- "documents"           -> C:\\Users\\nickn\\Documents
-- "downloads"           -> C:\\Users\\nickn\\Downloads
+- "workspace"   -> ~/.crimsonwell/workspace  (your working folder)
+- "crimsonwell" -> CrimsonWell install folder
+- "desktop"     -> ~/Desktop
+- "documents"   -> ~/Documents
+- "downloads"   -> ~/Downloads
 - For full paths always use forward slashes or double backslashes in JSON
 
 SAFETY RULES:
