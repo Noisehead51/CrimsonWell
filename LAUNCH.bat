@@ -4,11 +4,11 @@ chcp 65001 >nul 2>&1
 setlocal enabledelayedexpansion
 
 echo.
-echo   CrimsonWell ^| Local AI for Everyone
+echo   CrimsonWell - Local AI for Everyone
 echo   AMD Vulkan / NVIDIA CUDA / Intel Arc / CPU
 echo.
 
-:: ─── GPU DETECTION ────────────────────────────────────────────────────────────
+rem --- GPU DETECTION ---
 set "GPU_VENDOR=CPU"
 set "GPU_NAME=CPU only"
 
@@ -28,7 +28,7 @@ echo   GPU   : !GPU_NAME!
 echo   Vendor: !GPU_VENDOR!
 echo.
 
-:: ─── GPU ENV VARS ─────────────────────────────────────────────────────────────
+rem --- GPU ENV VARS ---
 if "!GPU_VENDOR!"=="AMD" (
     echo   [AMD] Enabling Vulkan acceleration...
     set "OLLAMA_VULKAN=1"
@@ -46,7 +46,7 @@ if "!GPU_VENDOR!"=="CPU" (
     echo   Tip: phi3:mini or llama3.2:3b work well on CPU
 )
 
-:: ─── FIND OLLAMA ──────────────────────────────────────────────────────────────
+rem --- FIND OLLAMA ---
 set "OLLAMA_EXE="
 if exist "!LOCALAPPDATA!\Programs\Ollama\ollama.exe" (
     set "OLLAMA_EXE=!LOCALAPPDATA!\Programs\Ollama\ollama.exe"
@@ -65,7 +65,7 @@ pause
 exit /b 1
 :ollama_found
 
-:: ─── START OLLAMA (restart to pick up GPU env vars) ──────────────────────────
+rem --- START OLLAMA ---
 tasklist /FI "IMAGENAME eq ollama.exe" 2>nul | find /I "ollama.exe" >nul 2>&1
 if !errorlevel!==0 (
     echo   [1/2] Restarting Ollama with GPU settings...
@@ -80,7 +80,7 @@ timeout /t 6 /nobreak >nul
 echo   Ollama started.
 echo.
 
-:: ─── FIND PYTHON ──────────────────────────────────────────────────────────────
+rem --- FIND PYTHON ---
 set "PYTHON_EXE="
 where python >nul 2>&1
 if !errorlevel!==0 (
@@ -107,13 +107,13 @@ exit /b 1
 :py_found
 echo   Python: !PYTHON_EXE!
 
-:: ─── START CRIMSONWELL ────────────────────────────────────────────────────────
+rem --- START CRIMSONWELL ---
 echo   [2/2] Starting CrimsonWell...
 set "SCRIPT_DIR=%~dp0"
 start "CrimsonWell" "!PYTHON_EXE!" "!SCRIPT_DIR!crimsonwell.py"
 timeout /t 4 /nobreak >nul
 
-:: ─── LOCAL IP ─────────────────────────────────────────────────────────────────
+rem --- GET LOCAL IP ---
 set "LOCAL_IP="
 for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /C:"IPv4"') do (
     set "LOCAL_IP=%%a"
