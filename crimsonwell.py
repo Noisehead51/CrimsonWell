@@ -12,7 +12,7 @@ Run:  python crimsonwell.py
 """
 
 import http.server, json, urllib.request, urllib.error, urllib.parse
-import threading, os, subprocess, sys, re, time, glob, socketserver
+import threading, os, subprocess, sys, re, time, glob, socketserver, base64
 from datetime import datetime
 
 # Ensure stdout/stderr use UTF-8 on Windows to avoid cp1252 crashes
@@ -103,6 +103,236 @@ def ollama_pull_bg(model: str):
             pass
     threading.Thread(target=_pull, daemon=True).start()
 
+# ─── VISION MODEL DETECTION ──────────────────────────────────────────────────
+
+_VISION_KEYS = ["gemma3", "llava", "bakllava", "moondream", "minicpm-v", "cogvlm", "llama3.2-vision"]
+
+def is_vision_capable(model: str) -> bool:
+    return any(v in model.lower() for v in _VISION_KEYS)
+
+# ─── FILE CONTEXT BUILDER ────────────────────────────────────────────────────
+
+def build_file_context(files: list, model: str) -> tuple:
+    """Returns (text_context: str, image_b64_list: list)."""
+    text_ctx, images = [], []
+    for f in (files or []):
+        name  = f.get("name", "file")
+        ftype = f.get("type", "")
+        data  = f.get("data", "")
+        if "," in data:
+            data = data.split(",", 1)[1]
+        try:
+            raw = base64.b64decode(data)
+        except Exception:
+            continue
+        if ftype.startswith("image/"):
+            if is_vision_capable(model):
+                images.append(data)
+            else:
+                text_ctx.append(f"[Image attached: {name} — switch to a vision model like gemma3 to analyze]")
+        else:
+            try:
+                text = raw.decode("utf-8", errors="replace")[:6000]
+                ext = name.rsplit(".", 1)[-1] if "." in name else "txt"
+                text_ctx.append(f"[File: {name}]\n```{ext}\n{text}\n```")
+            except Exception:
+                text_ctx.append(f"[Binary file: {name}]")
+    return "\n\n".join(text_ctx), images
+
+# ─── SAFE TOOL EXECUTOR ──────────────────────────────────────────────────────
+
+_BLOCKED_CMD_PATTERNS = [
+    "rm -rf", "del /f /s", "format c:", "shutdown /", "reboot",
+    "rd /s /q", "reg delete", "bcdedit", "diskpart", "mkfs",
+    "dd if=", ":(){:|:&};:", "wget -O /dev/", "curl -o /dev/"
+]
+
+def execute_tool(tool_name: str, args: dict) -> str:
+    """Execute a sandboxed agent tool. Returns result string."""
+    try:
+        if tool_name == "read_file":
+            path = os.path.abspath(os.path.expanduser(args.get("path", "")))
+            safe_roots = [WORKSPACE, BASE_DIR, os.path.expanduser("~/Desktop"),
+                          os.path.expanduser("~/Documents")]
+            if not any(path.startswith(r) for r in safe_roots):
+                return f"[BLOCKED] Path outside safe zone: {path}"
+            if not os.path.isfile(path):
+                return f"[ERROR] File not found: {path}"
+            with open(path, "r", errors="replace") as fp:
+                return fp.read(8000)
+
+        elif tool_name == "write_file":
+            path = args.get("path", "")
+            if not os.path.isabs(path):
+                path = os.path.join(WORKSPACE, path)
+            path = os.path.abspath(path)
+            if not path.startswith(WORKSPACE):
+                return f"[BLOCKED] Can only write inside workspace: {WORKSPACE}"
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as fp:
+                fp.write(args.get("content", ""))
+            return f"[OK] Written: {path}"
+
+        elif tool_name == "list_dir":
+            path = os.path.abspath(os.path.expanduser(args.get("path", WORKSPACE)))
+            if not os.path.isdir(path):
+                return f"[ERROR] Not a directory: {path}"
+            items = os.listdir(path)[:60]
+            lines = []
+            for item in items:
+                full = os.path.join(path, item)
+                tag = "[D]" if os.path.isdir(full) else "[F]"
+                lines.append(f"{tag} {item}")
+            return "\n".join(lines) or "(empty)"
+
+        elif tool_name == "run_python":
+            code = args.get("code", "").strip()
+            script = os.path.join(WORKSPACE, "_agent_run.py")
+            with open(script, "w", encoding="utf-8") as fp:
+                fp.write(code)
+            r = subprocess.run(
+                [sys.executable, script],
+                capture_output=True, text=True, timeout=30, cwd=WORKSPACE
+            )
+            out = (r.stdout + r.stderr).strip()
+            return out[:3000] if out else "[OK] Script completed (no output)"
+
+        elif tool_name == "run_cmd":
+            cmd = args.get("cmd", "").strip()
+            low = cmd.lower()
+            for pat in _BLOCKED_CMD_PATTERNS:
+                if pat in low:
+                    return f"[BLOCKED] Dangerous pattern detected: {pat}"
+            r = subprocess.run(
+                cmd, shell=True, capture_output=True, text=True,
+                timeout=30, cwd=WORKSPACE
+            )
+            out = (r.stdout + r.stderr).strip()
+            return out[:3000] if out else "[OK]"
+
+        elif tool_name == "open_url":
+            url = args.get("url", "")
+            if url.startswith(("http://", "https://")):
+                import webbrowser
+                webbrowser.open(url)
+                return f"[OK] Opened: {url}"
+            return "[ERROR] Only http/https URLs allowed"
+
+        elif tool_name == "search_file":
+            pattern = args.get("pattern", "")
+            path = os.path.abspath(os.path.expanduser(args.get("path", WORKSPACE)))
+            results = []
+            for f in glob.glob(os.path.join(path, "**", pattern), recursive=True)[:20]:
+                results.append(f)
+            return "\n".join(results) or "(no matches)"
+
+        else:
+            return f"[ERROR] Unknown tool: {tool_name}"
+
+    except subprocess.TimeoutExpired:
+        return "[ERROR] Tool timed out"
+    except Exception as e:
+        return f"[ERROR] {e}"
+
+# ─── AGENT LOOP ───────────────────────────────────────────────────────────────
+
+_AGENT_SYSTEM = """You are an autonomous AI agent running on the user's PC. You complete tasks step-by-step using tools.
+
+To use a tool, output EXACTLY this format (nothing else on those lines):
+<use_tool>
+{{"tool": "TOOL_NAME", "args": {{...}}}}
+</use_tool>
+
+Available tools:
+- read_file: {{"path": "..."}} — Read file (safe paths only)
+- write_file: {{"path": "filename.py", "content": "..."}} — Write file to workspace
+- list_dir: {{"path": "..."}} — List directory contents
+- run_python: {{"code": "import os\\nprint(os.getcwd())"}} — Execute Python code
+- run_cmd: {{"cmd": "dir"}} — Run shell command (safe commands only)
+- open_url: {{"url": "https://..."}} — Open URL in browser
+- search_file: {{"path": "...", "pattern": "*.py"}} — Find files by pattern
+
+Workspace: {workspace}
+
+Rules:
+1. Think step by step before acting
+2. Use tools to gather info before writing code
+3. Always verify file writes with read_file
+4. Report what you accomplished when done
+5. If a command fails, try an alternative approach"""
+
+_TOOL_RE = re.compile(r'<use_tool>\s*(.*?)\s*</use_tool>', re.DOTALL)
+
+def _agent_loop(task: str, history: list, model: str, images: list = None):
+    """Autonomous ReAct loop — yields SSE chunks."""
+    system = _AGENT_SYSTEM.format(workspace=WORKSPACE)
+    messages = [{"role": "system", "content": system}]
+    for h in history[-4:]:
+        messages.append({"role": h["role"], "content": h["content"]})
+    user_msg: dict = {"role": "user", "content": task}
+    if images:
+        user_msg["images"] = images
+    messages.append(user_msg)
+
+    for step in range(10):
+        payload = json.dumps({
+            "model": model, "messages": messages, "stream": True,
+            "options": {"temperature": 0.3, "num_ctx": 8192}
+        }).encode()
+        req = urllib.request.Request(
+            f"{OLLAMA}/api/chat", data=payload,
+            headers={"Content-Type": "application/json"}
+        )
+        full_response = []
+        try:
+            with urllib.request.urlopen(req, timeout=180) as r:
+                for raw_line in r:
+                    raw_line = raw_line.strip()
+                    if not raw_line:
+                        continue
+                    try:
+                        chunk = json.loads(raw_line)
+                        token = chunk.get("message", {}).get("content", "")
+                        if token:
+                            full_response.append(token)
+                            safe = token.replace("\n", "\\n")
+                            yield f"data: {safe}\n\n"
+                        if chunk.get("done"):
+                            break
+                    except Exception:
+                        pass
+        except Exception as e:
+            yield f"data: \\n\\n**[Agent error: {e}]**\\n\n\n"
+            break
+
+        full_text = "".join(full_response)
+        messages.append({"role": "assistant", "content": full_text})
+
+        # Check for tool calls
+        tool_calls = _TOOL_RE.findall(full_text)
+        if not tool_calls:
+            break  # No tools = agent is done
+
+        tool_results = []
+        for call_json in tool_calls:
+            try:
+                call = json.loads(call_json.strip())
+                t_name = call.get("tool", "")
+                t_args = call.get("args", {})
+            except Exception as parse_err:
+                tool_results.append(f"[parse error: {parse_err}]")
+                continue
+
+            result = execute_tool(t_name, t_args)
+            short = result[:120].replace("\n", " ")
+            yield f"data: \\n\\n> **[{t_name}]** {short}{'...' if len(result)>120 else ''}\\n\n\n"
+            tool_results.append(f"<result tool='{t_name}'>\n{result[:2000]}\n</result>")
+
+        messages.append({"role": "user", "content": "\n".join(tool_results)})
+
+    record_usage("agent", model)
+    yield "data: [DONE]\n\n"
+
 # ─── SKILL SCANNER ───────────────────────────────────────────────────────────
 
 def scan_skills() -> list:
@@ -143,11 +373,11 @@ def build_status() -> dict:
 
 # ─── STREAMING CHAT ───────────────────────────────────────────────────────────
 
-def stream_chat(message: str, history: list, model_override: str | None):
+def stream_chat(message: str, history: list, model_override: str | None, files: list = None):
     """
     Generator that yields SSE lines.
     First yields a meta JSON (intent, model, agent info).
-    Then streams tokens from Ollama.
+    Then streams tokens from Ollama (or runs agent loop for agent intent).
     """
     ol = ollama_models()
     gpu = cached_gpu()
@@ -181,12 +411,25 @@ def stream_chat(message: str, history: list, model_override: str | None):
     }
     yield f"data: {json.dumps(meta)}\n\n"
 
+    # Build file context
+    file_text, image_data = build_file_context(files or [], model)
+    full_message = (file_text + "\n\n" + message).strip() if file_text else message
+
+    # Agent intent → run autonomous loop
+    if intent == "agent":
+        yield from _agent_loop(full_message, history, model, image_data or None)
+        return
+
     # Build messages
     system_prompt = route.get("system", "You are a helpful assistant.")
     messages = [{"role": "system", "content": system_prompt}]
     for h in history[-8:]:  # last 8 exchanges for context
         messages.append({"role": h["role"], "content": h["content"]})
-    messages.append({"role": "user", "content": message})
+
+    user_msg: dict = {"role": "user", "content": full_message}
+    if image_data:
+        user_msg["images"] = image_data
+    messages.append(user_msg)
 
     payload = json.dumps({
         "model": model,
@@ -301,14 +544,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
             message  = body.get("message", "").strip()
             history  = body.get("history", [])
             model_ov = body.get("model") or None
+            files    = body.get("files") or []
 
-            if not message:
+            if not message and not files:
                 self._json({"error": "empty message"}, 400)
                 return
+            if not message and files:
+                message = "Please analyze the attached file(s)."
 
             self._sse_headers()
             try:
-                for chunk in stream_chat(message, history, model_ov):
+                for chunk in stream_chat(message, history, model_ov, files):
                     self.wfile.write(chunk.encode("utf-8"))
                     self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError):
@@ -429,14 +675,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .q-btn:hover{border-color:var(--c);color:var(--c);background:var(--cg)}
 
 /* INPUT */
-.inp-area{display:flex;gap:7px;padding:10px 12px;background:var(--s1);border-top:1px solid var(--br);flex-shrink:0}
+.inp-area{display:flex;flex-direction:column;gap:5px;padding:8px 12px 10px;background:var(--s1);border-top:1px solid var(--br);flex-shrink:0}
+.inp-row{display:flex;gap:7px;align-items:flex-end}
 .inp-wrap{flex:1;position:relative}
 #inp{width:100%;background:var(--s2);border:1px solid var(--br);border-radius:7px;color:var(--tx);font-size:13px;padding:9px 12px;outline:none;resize:none;min-height:40px;max-height:110px;font-family:inherit;transition:border-color .15s;line-height:1.5}
 #inp:focus{border-color:var(--c)}
 #inp::placeholder{color:var(--mu)}
-.send{background:var(--c);color:#fff;border:none;border-radius:7px;padding:9px 15px;cursor:pointer;font-size:13px;font-weight:600;transition:background .15s;align-self:flex-end;white-space:nowrap}
+.send{background:var(--c);color:#fff;border:none;border-radius:7px;padding:9px 15px;cursor:pointer;font-size:13px;font-weight:600;transition:background .15s;white-space:nowrap}
 .send:hover{background:var(--cd)}
 .send:disabled{opacity:.35;cursor:not-allowed}
+.attach-btn{background:var(--s2);color:var(--mu);border:1px solid var(--br);border-radius:7px;padding:9px 11px;cursor:pointer;font-size:14px;transition:all .15s;white-space:nowrap}
+.attach-btn:hover{border-color:var(--c);color:var(--c)}
+.file-chips{display:flex;flex-wrap:wrap;gap:5px;padding:0 2px}
+.chip{display:flex;align-items:center;gap:4px;background:var(--s2);border:1px solid var(--br);border-radius:4px;padding:2px 7px;font-size:11px;color:var(--mu)}
+.chip .rm{cursor:pointer;color:var(--mu);margin-left:2px;opacity:.7}
+.chip .rm:hover{color:#ef4444;opacity:1}
+.chip.img{border-color:#3b82f6;color:#3b82f6}
 
 /* SCROLLBAR */
 ::-webkit-scrollbar{width:3px}
@@ -485,10 +739,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div id="msgs" class="msgs"></div>
     <div class="qa" id="qa"></div>
     <div class="inp-area">
-      <div class="inp-wrap">
-        <textarea id="inp" placeholder="Ask anything — I'll pick the right AI for the job" rows="1"></textarea>
+      <div id="file-chips" class="file-chips"></div>
+      <div class="inp-row">
+        <button class="attach-btn" title="Attach file" onclick="document.getElementById('file-input').click()">📎</button>
+        <input type="file" id="file-input" multiple accept="*/*" style="display:none" onchange="handleFiles(this.files)">
+        <div class="inp-wrap">
+          <textarea id="inp" placeholder="Ask anything — attach files, run agent tasks, code, design..." rows="1"></textarea>
+        </div>
+        <button class="send" id="send-btn" onclick="send()">Send ▶</button>
       </div>
-      <button class="send" id="send-btn" onclick="send()">Send ▶</button>
     </div>
   </div>
 </div>
@@ -500,6 +759,7 @@ let currentModel = '';
 let currentIntent = 'chat';
 let streaming = false;
 let status = {};
+let attachedFiles = [];  // [{name, type, data (base64 dataURL)}]
 
 const QUICK = [
   {l:'💻 Code', p:'Write a Python script that '},
@@ -667,20 +927,78 @@ function addMsg(role, html, meta) {
   return wrap;
 }
 
+// ─── FILE HANDLING ────────────────────────────────────────────────────────────
+function handleFiles(fileList) {
+  const remaining = 5 - attachedFiles.length;
+  const toAdd = Array.from(fileList).slice(0, remaining);
+  toAdd.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      attachedFiles.push({name: file.name, type: file.type, data: e.target.result});
+      renderChips();
+    };
+    reader.readAsDataURL(file);
+  });
+  document.getElementById('file-input').value = '';
+}
+
+function renderChips() {
+  const el = document.getElementById('file-chips');
+  el.innerHTML = '';
+  attachedFiles.forEach((f, i) => {
+    const isImg = f.type.startsWith('image/');
+    const chip = document.createElement('div');
+    chip.className = 'chip' + (isImg ? ' img' : '');
+    chip.innerHTML = `${isImg ? '🖼' : '📄'} ${esc(f.name)} <span class="rm" onclick="removeFile(${i})">✕</span>`;
+    el.appendChild(chip);
+  });
+}
+
+function removeFile(idx) {
+  attachedFiles.splice(idx, 1);
+  renderChips();
+}
+
+// drag & drop on chat area (DOM already ready since script is at bottom of body)
+(function() {
+  const msgs = document.getElementById('msgs');
+  if (msgs) {
+    msgs.addEventListener('dragover', e => { e.preventDefault(); msgs.style.opacity = '.7'; });
+    msgs.addEventListener('dragleave', () => { msgs.style.opacity = '1'; });
+    msgs.addEventListener('drop', e => {
+      e.preventDefault(); msgs.style.opacity = '1';
+      if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+    });
+  }
+})();
+
 // ─── SEND ─────────────────────────────────────────────────────────────────────
 async function send() {
   if (streaming) return;
   const inp = document.getElementById('inp');
   const text = inp.value.trim();
-  if (!text) return;
+  if (!text && attachedFiles.length === 0) return;
+
+  const filesToSend = [...attachedFiles];
+  attachedFiles = [];
+  renderChips();
 
   inp.value = '';
   resize(inp);
   streaming = true;
   document.getElementById('send-btn').disabled = true;
 
-  addMsg('user', esc(text));
-  history.push({role:'user', content:text});
+  // Show user message (with file indicators)
+  let userHtml = text ? esc(text) : '';
+  if (filesToSend.length) {
+    const fnames = filesToSend.map(f => {
+      const isImg = f.type.startsWith('image/');
+      return `<span class="chip ${isImg?'img':''}" style="display:inline-flex">${isImg?'🖼':'📄'} ${esc(f.name)}</span>`;
+    }).join(' ');
+    userHtml = (userHtml ? userHtml + '<br>' : '') + fnames;
+  }
+  addMsg('user', userHtml || '(files attached)');
+  history.push({role:'user', content: text || '(files attached)'});
 
   const mid = 'b' + Date.now();
   const aiWrap = addMsg('ai', '<div class="typing"><span></span><span></span><span></span></div>', {id: mid});
@@ -693,7 +1011,12 @@ async function send() {
     const resp = await fetch('/api/chat', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({message:text, history:history.slice(-10), model:currentModel||null})
+      body: JSON.stringify({
+        message: text || 'Please analyze the attached file(s).',
+        history: history.slice(-10),
+        model: currentModel||null,
+        files: filesToSend
+      })
     });
 
     if (!resp.ok) throw new Error('Server error ' + resp.status);

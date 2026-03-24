@@ -29,38 +29,46 @@ echo.
 
 :: ─── GPU-SPECIFIC OLLAMA ENV ─────────────────────────────────────────────────
 if "!GPU_VENDOR!"=="AMD" (
-    echo   [AMD] Vulkan acceleration enabled
+    echo   [AMD] Enabling Vulkan acceleration...
+    set OLLAMA_VULKAN=1
     set OLLAMA_GPU_OVERHEAD=0
-    :: If you have an older AMD GPU and it defaults to CPU, uncomment:
+    :: RX 6600 XT is gfx1032 (RDNA2). Required if ROCm path exists but Vulkan is preferred.
+    :: Uncomment only if Vulkan doesn't work and you want to try ROCm instead:
     :: set HSA_OVERRIDE_GFX_VERSION=10.3.0
 )
+if "!GPU_VENDOR!"=="NVIDIA" (
+    echo   [NVIDIA] CUDA acceleration active
+)
+if "!GPU_VENDOR!"=="Intel" (
+    echo   [Intel] Vulkan acceleration active
+    set OLLAMA_VULKAN=1
+)
 if "!GPU_VENDOR!"=="CPU" (
-    echo   [!] No GPU detected — running on CPU. Try phi3:mini or llama3.2:3b for best speed.
+    echo   [!] No GPU detected - running on CPU. Recommended models: phi3:mini, llama3.2:3b
 )
 
-:: ─── START OLLAMA ─────────────────────────────────────────────────────────────
+:: ─── START OLLAMA (always restart for clean GPU init) ────────────────────────
+set OLLAMA_EXE=
+if exist "!LOCALAPPDATA!\Programs\Ollama\ollama.exe" set "OLLAMA_EXE=!LOCALAPPDATA!\Programs\Ollama\ollama.exe"
+if "!OLLAMA_EXE!"=="" where ollama >nul 2>&1 && set OLLAMA_EXE=ollama
+if "!OLLAMA_EXE!"=="" (
+    echo   [ERROR] Ollama not found. Download from: https://ollama.com/download
+    pause & exit /b 1
+)
+
+:: Kill any existing Ollama so it restarts with correct GPU env vars
 tasklist /FI "IMAGENAME eq ollama.exe" 2>nul | find /I "ollama.exe" >nul
-if %errorlevel% neq 0 (
-    echo   [1/2] Starting Ollama...
-    set OLLAMA_HOST=0.0.0.0:11434
-
-    set OLLAMA_EXE=
-    if exist "!LOCALAPPDATA!\Programs\Ollama\ollama.exe" set "OLLAMA_EXE=!LOCALAPPDATA!\Programs\Ollama\ollama.exe"
-    if "!OLLAMA_EXE!"=="" (
-        where ollama >nul 2>&1 && set OLLAMA_EXE=ollama
-    )
-    if "!OLLAMA_EXE!"=="" (
-        echo.
-        echo   [ERROR] Ollama not found. Download from: https://ollama.com/download
-        echo   Then run SETUP.bat and try again.
-        pause & exit /b 1
-    )
-    start /min "" "!OLLAMA_EXE!" serve
-    timeout /t 6 /nobreak >nul
-    echo   Ollama started.
+if %errorlevel%==0 (
+    echo   [1/2] Restarting Ollama with GPU settings...
+    taskkill /IM ollama.exe /F >nul 2>&1
+    timeout /t 2 /nobreak >nul
 ) else (
-    echo   [1/2] Ollama already running
+    echo   [1/2] Starting Ollama...
 )
+set OLLAMA_HOST=0.0.0.0:11434
+start /min "" "!OLLAMA_EXE!" serve
+timeout /t 8 /nobreak >nul
+echo   Ollama started with GPU acceleration.
 
 :: ─── FIND PYTHON ─────────────────────────────────────────────────────────────
 set PYTHON_EXE=

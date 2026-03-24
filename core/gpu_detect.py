@@ -70,7 +70,8 @@ def get_gpu_info() -> dict:
         info["vendor"] = "amd"
         info["backend"] = "vulkan"
         info["ollama_env"] = {
-            "OLLAMA_GPU_OVERHEAD": "0",
+            "OLLAMA_VULKAN": "1",        # Required — Vulkan is experimental/opt-in in Ollama
+            "OLLAMA_GPU_OVERHEAD": "0",  # Use all available VRAM
         }
     elif any(k in name_lower for k in ["nvidia", "geforce", "rtx", "gtx", "quadro", "tesla"]):
         info["vendor"] = "nvidia"
