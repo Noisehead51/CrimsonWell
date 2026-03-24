@@ -78,13 +78,20 @@ def pick_model(available_models: list, intent: str, vram_mb: int) -> str:
 
     # Score each installed model
     def score(model_name: str) -> tuple:
-        # Find catalog entry (partial match)
+        # Find catalog entry — try exact match first, then longest-prefix match
         spec = None
+        best_match_len = 0
         for catalog_name, s in MODEL_CATALOG.items():
             base = catalog_name.split(":")[0]
-            if model_name.startswith(base) or catalog_name in model_name:
+            # Exact catalog name match
+            if model_name == catalog_name:
                 spec = s
                 break
+            # Prefix match: require full base name match (e.g. "qwen2.5-coder" not "qwen2.5")
+            if (model_name.startswith(base + ":") or model_name == base):
+                if len(base) > best_match_len:
+                    spec = s
+                    best_match_len = len(base)
         if spec is None:
             return (0, 0, 0)
         # Filter by VRAM
@@ -100,11 +107,16 @@ def pick_model(available_models: list, intent: str, vram_mb: int) -> str:
 
 def model_vram(model_name: str) -> int:
     """Look up VRAM estimate for a model name. Returns 0 if unknown."""
+    best_vram, best_len = 0, 0
     for catalog_name, spec in MODEL_CATALOG.items():
         base = catalog_name.split(":")[0]
-        if model_name.startswith(base) or catalog_name in model_name:
+        if model_name == catalog_name:
             return spec["vram_mb"]
-    return 0
+        if (model_name.startswith(base + ":") or model_name == base):
+            if len(base) > best_len:
+                best_vram = spec["vram_mb"]
+                best_len = len(base)
+    return best_vram
 
 
 def model_fits(model_name: str, vram_mb: int) -> bool:

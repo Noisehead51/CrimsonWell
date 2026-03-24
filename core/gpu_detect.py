@@ -40,9 +40,15 @@ def get_gpu_info() -> dict:
         vram = vrams[best_idx] if vrams else 0
         vram_mb = vram // (1024 * 1024)
 
-        # WMI sometimes lies (reports 4MB for discrete), cap minimum
-        if 0 < vram_mb < 512:
-            vram_mb = 0  # unreliable, zero it out
+        # WMI commonly lies about VRAM for AMD GPUs (reports 4095MB for 8GB cards).
+        # This is a known Windows WMI bug with large VRAM values.
+        # 4095 MB = exactly 4GB-1MB = WMI overflow for 8GB cards → correct to 8192
+        # 2047 MB = WMI overflow for 4GB cards → correct to 4096
+        wmi_overflow_map = {4095: 8192, 2047: 4096, 1023: 2048, 8191: 16384}
+        if vram_mb in wmi_overflow_map:
+            vram_mb = wmi_overflow_map[vram_mb]
+        elif 0 < vram_mb < 512:
+            vram_mb = 0  # truly unreliable, zero it out
 
         info["name"] = name
         info["vram_mb"] = vram_mb

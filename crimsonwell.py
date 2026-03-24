@@ -1,6 +1,7 @@
+# -*- coding: utf-8 -*-
 #!/usr/bin/env python3
 """
-CrimsonWell — Local AI for Everyone
+CrimsonWell - Local AI for Everyone
 Auto-routing orchestrator with VRAM-aware model switching.
 
 Works on:  AMD (Vulkan)  |  NVIDIA (CUDA)  |  Intel Arc  |  CPU
@@ -13,6 +14,12 @@ Run:  python crimsonwell.py
 import http.server, json, urllib.request, urllib.error, urllib.parse
 import threading, os, subprocess, sys, re, time, glob, socketserver
 from datetime import datetime
+
+# Ensure stdout/stderr use UTF-8 on Windows to avoid cp1252 crashes
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 # ─── SETUP PATHS ──────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -798,28 +805,27 @@ def start():
     except Exception:
         pass
 
-    print(f"""
-  ╔═══════════════════════════════════╗
-  ║   CrimsonWell — Local AI Stack    ║
-  ╠═══════════════════════════════════╣""")
+    # Use ASCII-safe banner (avoids cp1252 encoding issues on Windows)
+    sep = "  " + "=" * 39
+    print(sep)
+    print("  CrimsonWell - Local AI Stack")
+    print(sep)
 
     try:
         gpu = cached_gpu()
-        print(f"  ║   GPU : {gpu['name'][:30]:<30} ║")
-        if gpu['vram_mb']:
-            print(f"  ║   VRAM: {gpu['vram_mb']//1024}GB ({gpu['backend']}){'':>22} ║")
-        else:
-            print(f"  ║   VRAM: unknown ({gpu['backend']}){'':>20} ║")
+        print(f"  GPU   : {gpu['name'][:40]}")
+        vram_str = f"{gpu['vram_mb']//1024}GB" if gpu['vram_mb'] else "unknown"
+        print(f"  VRAM  : {vram_str} ({gpu['backend']})")
     except Exception:
-        print(f"  ║   GPU : (detection failed){'':>10} ║")
+        print("  GPU   : detection failed")
 
     ol = ollama_models()
     model_count = len(ol['models'])
-    status_str = f"{model_count} models" if ol['ok'] else "not running"
-    print(f"  ║   Ollama: {status_str:<27} ║")
-    print(f"  ╠═══════════════════════════════════╣")
-    print(f"  ║   http://localhost:{PORT}             ║")
-    print(f"  ╚═══════════════════════════════════╝")
+    status_str = f"{model_count} models" if ol['ok'] else "NOT RUNNING"
+    print(f"  Ollama: {status_str}")
+    print(sep)
+    print(f"  http://localhost:{PORT}")
+    print(sep)
     print()
 
     if not ol['ok']:
