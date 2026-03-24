@@ -8,94 +8,113 @@ echo   CrimsonWell ^| Local AI for Everyone
 echo   AMD Vulkan / NVIDIA CUDA / Intel Arc / CPU
 echo.
 
-:: ─── GPU DETECTION ───────────────────────────────────────────────────────────
-set GPU_VENDOR=CPU
-set GPU_NAME=CPU only
+:: ─── GPU DETECTION ────────────────────────────────────────────────────────────
+set "GPU_VENDOR=CPU"
+set "GPU_NAME=CPU only"
 
-for /f "tokens=2 delims==" %%a in (
-    'wmic path win32_videocontroller get name /value 2^>nul ^| findstr /i "Name="'
-) do (
+for /f "tokens=2 delims==" %%a in ('wmic path win32_videocontroller get name /value 2^>nul ^| findstr /i "Name="') do (
     set "GPU_NAME=%%a"
-    echo %%a | findstr /i "AMD Radeon RX Vega RDNA" >nul && set GPU_VENDOR=AMD
-    echo %%a | findstr /i "NVIDIA GeForce RTX GTX Quadro" >nul && set GPU_VENDOR=NVIDIA
-    echo %%a | findstr /i "Intel Arc Iris UHD" >nul && set GPU_VENDOR=Intel
+    echo %%a | findstr /i "AMD Radeon RX Vega RDNA" >nul 2>&1
+    if !errorlevel!==0 set "GPU_VENDOR=AMD"
+    echo %%a | findstr /i "NVIDIA GeForce RTX GTX Quadro" >nul 2>&1
+    if !errorlevel!==0 set "GPU_VENDOR=NVIDIA"
+    echo %%a | findstr /i "Intel Arc Iris UHD" >nul 2>&1
+    if !errorlevel!==0 set "GPU_VENDOR=Intel"
     goto :gpu_done
 )
 :gpu_done
 
-echo   GPU: !GPU_NAME!
-echo   Backend: !GPU_VENDOR!
+echo   GPU   : !GPU_NAME!
+echo   Vendor: !GPU_VENDOR!
 echo.
 
-:: ─── GPU-SPECIFIC OLLAMA ENV ─────────────────────────────────────────────────
+:: ─── GPU ENV VARS ─────────────────────────────────────────────────────────────
 if "!GPU_VENDOR!"=="AMD" (
     echo   [AMD] Enabling Vulkan acceleration...
-    set OLLAMA_VULKAN=1
-    set OLLAMA_GPU_OVERHEAD=0
-    :: RX 6600 XT is gfx1032 (RDNA2). Required if ROCm path exists but Vulkan is preferred.
-    :: Uncomment only if Vulkan doesn't work and you want to try ROCm instead:
-    :: set HSA_OVERRIDE_GFX_VERSION=10.3.0
+    set "OLLAMA_VULKAN=1"
+    set "OLLAMA_GPU_OVERHEAD=0"
 )
 if "!GPU_VENDOR!"=="NVIDIA" (
     echo   [NVIDIA] CUDA acceleration active
 )
 if "!GPU_VENDOR!"=="Intel" (
     echo   [Intel] Vulkan acceleration active
-    set OLLAMA_VULKAN=1
+    set "OLLAMA_VULKAN=1"
 )
 if "!GPU_VENDOR!"=="CPU" (
-    echo   [!] No GPU detected - running on CPU. Recommended models: phi3:mini, llama3.2:3b
+    echo   [i] No discrete GPU - running on CPU
+    echo   Tip: phi3:mini or llama3.2:3b work well on CPU
 )
 
-:: ─── START OLLAMA (always restart for clean GPU init) ────────────────────────
-set OLLAMA_EXE=
-if exist "!LOCALAPPDATA!\Programs\Ollama\ollama.exe" set "OLLAMA_EXE=!LOCALAPPDATA!\Programs\Ollama\ollama.exe"
-if "!OLLAMA_EXE!"=="" where ollama >nul 2>&1 && set OLLAMA_EXE=ollama
-if "!OLLAMA_EXE!"=="" (
-    echo   [ERROR] Ollama not found. Download from: https://ollama.com/download
-    pause & exit /b 1
+:: ─── FIND OLLAMA ──────────────────────────────────────────────────────────────
+set "OLLAMA_EXE="
+if exist "!LOCALAPPDATA!\Programs\Ollama\ollama.exe" (
+    set "OLLAMA_EXE=!LOCALAPPDATA!\Programs\Ollama\ollama.exe"
+    goto :ollama_found
 )
+where ollama >nul 2>&1
+if !errorlevel!==0 (
+    set "OLLAMA_EXE=ollama"
+    goto :ollama_found
+)
+echo.
+echo   [ERROR] Ollama not found!
+echo   Download: https://ollama.com/download
+echo.
+pause
+exit /b 1
+:ollama_found
 
-:: Kill any existing Ollama so it restarts with correct GPU env vars
-tasklist /FI "IMAGENAME eq ollama.exe" 2>nul | find /I "ollama.exe" >nul
-if %errorlevel%==0 (
+:: ─── START OLLAMA (restart to pick up GPU env vars) ──────────────────────────
+tasklist /FI "IMAGENAME eq ollama.exe" 2>nul | find /I "ollama.exe" >nul 2>&1
+if !errorlevel!==0 (
     echo   [1/2] Restarting Ollama with GPU settings...
     taskkill /IM ollama.exe /F >nul 2>&1
     timeout /t 2 /nobreak >nul
 ) else (
     echo   [1/2] Starting Ollama...
 )
-set OLLAMA_HOST=0.0.0.0:11434
-start /min "" "!OLLAMA_EXE!" serve
-timeout /t 8 /nobreak >nul
-echo   Ollama started with GPU acceleration.
+set "OLLAMA_HOST=0.0.0.0:11434"
+start "Ollama" /min "!OLLAMA_EXE!" serve
+timeout /t 6 /nobreak >nul
+echo   Ollama started.
+echo.
 
-:: ─── FIND PYTHON ─────────────────────────────────────────────────────────────
-set PYTHON_EXE=
-where python >nul 2>&1 && set PYTHON_EXE=python
-if "!PYTHON_EXE!"=="" where python3 >nul 2>&1 && set PYTHON_EXE=python3
-if "!PYTHON_EXE!"=="" (
-    for %%v in (313 312 311 310) do (
-        if exist "!LOCALAPPDATA!\Programs\Python\Python%%v\python.exe" (
-            set "PYTHON_EXE=!LOCALAPPDATA!\Programs\Python\Python%%v\python.exe"
-            goto :py_done
-        )
+:: ─── FIND PYTHON ──────────────────────────────────────────────────────────────
+set "PYTHON_EXE="
+where python >nul 2>&1
+if !errorlevel!==0 (
+    set "PYTHON_EXE=python"
+    goto :py_found
+)
+where python3 >nul 2>&1
+if !errorlevel!==0 (
+    set "PYTHON_EXE=python3"
+    goto :py_found
+)
+for %%v in (313 312 311 310 39) do (
+    if exist "!LOCALAPPDATA!\Programs\Python\Python%%v\python.exe" (
+        set "PYTHON_EXE=!LOCALAPPDATA!\Programs\Python\Python%%v\python.exe"
+        goto :py_found
     )
 )
-:py_done
-if "!PYTHON_EXE!"=="" (
-    echo   [ERROR] Python not found. Download from: https://python.org/downloads
-    pause & exit /b 1
-)
+echo.
+echo   [ERROR] Python not found!
+echo   Download: https://python.org/downloads
+echo.
+pause
+exit /b 1
+:py_found
+echo   Python: !PYTHON_EXE!
 
 :: ─── START CRIMSONWELL ────────────────────────────────────────────────────────
 echo   [2/2] Starting CrimsonWell...
-set SCRIPT_DIR=%~dp0
-start /min "" "!PYTHON_EXE!" "!SCRIPT_DIR!crimsonwell.py"
-timeout /t 3 /nobreak >nul
+set "SCRIPT_DIR=%~dp0"
+start "CrimsonWell" "!PYTHON_EXE!" "!SCRIPT_DIR!crimsonwell.py"
+timeout /t 4 /nobreak >nul
 
-:: ─── LOCAL IP FOR PHONE/REMOTE ACCESS ────────────────────────────────────────
-set LOCAL_IP=
+:: ─── LOCAL IP ─────────────────────────────────────────────────────────────────
+set "LOCAL_IP="
 for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /C:"IPv4"') do (
     set "LOCAL_IP=%%a"
     set "LOCAL_IP=!LOCAL_IP: =!"
@@ -103,7 +122,7 @@ for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /C:"IPv4"') do (
 )
 :got_ip
 
-start "" http://localhost:3000
+start "" "http://localhost:3000"
 
 echo.
 echo   ============================================
@@ -112,6 +131,11 @@ echo    Local:   http://localhost:3000
 if defined LOCAL_IP echo    Network: http://!LOCAL_IP!:3000
 echo   ============================================
 echo.
-echo   Press any key to stop CrimsonWell.
+echo   Keep this window open.
+echo   Press any key to STOP CrimsonWell + Ollama.
 pause >nul
-taskkill /f /fi "WINDOWTITLE eq CrimsonWell*" >nul 2>&1
+
+taskkill /FI "WINDOWTITLE eq CrimsonWell" /F >nul 2>&1
+taskkill /IM ollama.exe /F >nul 2>&1
+echo   Stopped.
+timeout /t 1 /nobreak >nul
