@@ -741,8 +741,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="inp-area">
       <div id="file-chips" class="file-chips"></div>
       <div class="inp-row">
-        <button class="attach-btn" title="Attach file" onclick="document.getElementById('file-input').click()">📎</button>
-        <input type="file" id="file-input" multiple accept="*/*" style="display:none" onchange="handleFiles(this.files)">
+        <button class="attach-btn" title="Attach file" onclick="document.getElementById('file-input').click()">+ File</button>
+        <input type="file" id="file-input" multiple style="display:none" onchange="handleFiles(this.files)">
         <div class="inp-wrap">
           <textarea id="inp" placeholder="Ask anything — attach files, run agent tasks, code, design..." rows="1"></textarea>
         </div>
@@ -959,18 +959,19 @@ function removeFile(idx) {
   renderChips();
 }
 
-// drag & drop on chat area (DOM already ready since script is at bottom of body)
-(function() {
-  const msgs = document.getElementById('msgs');
-  if (msgs) {
-    msgs.addEventListener('dragover', e => { e.preventDefault(); msgs.style.opacity = '.7'; });
-    msgs.addEventListener('dragleave', () => { msgs.style.opacity = '1'; });
-    msgs.addEventListener('drop', e => {
-      e.preventDefault(); msgs.style.opacity = '1';
-      if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
-    });
-  }
-})();
+// drag & drop — works anywhere on the page
+document.body.addEventListener('dragover', e => {
+  e.preventDefault();
+  document.getElementById('inp').style.borderColor = 'var(--c)';
+});
+document.body.addEventListener('dragleave', e => {
+  if (!e.relatedTarget) document.getElementById('inp').style.borderColor = '';
+});
+document.body.addEventListener('drop', e => {
+  e.preventDefault();
+  document.getElementById('inp').style.borderColor = '';
+  if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+});
 
 // ─── SEND ─────────────────────────────────────────────────────────────────────
 async function send() {
@@ -1023,15 +1024,18 @@ async function send() {
 
     const reader = resp.body.getReader();
     const dec = new TextDecoder();
+    let buf = '';
 
-    while (true) {
+    outer: while (true) {
       const {done, value} = await reader.read();
       if (done) break;
-      const lines = dec.decode(value).split('\n');
+      buf += dec.decode(value, {stream: true});
+      const lines = buf.split('\n');
+      buf = lines.pop(); // keep incomplete last line
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6);
-        if (data === '[DONE]') break;
+        const data = line.slice(6).trimEnd();
+        if (data === '[DONE]') break outer;
         if (data.startsWith('{')) {
           try {
             const info = JSON.parse(data);
