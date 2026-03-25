@@ -484,7 +484,7 @@ def build_status() -> dict:
 
 # ─── STREAMING CHAT ───────────────────────────────────────────────────────────
 
-def stream_chat(message: str, history: list, model_override: str | None, files: list = None):
+def stream_chat(message: str, history: list, model_override: str | None, files: list = None, intent_override: str = None):
     """
     Generator that yields SSE lines.
     First yields a meta JSON (intent, model, agent info).
@@ -493,9 +493,17 @@ def stream_chat(message: str, history: list, model_override: str | None, files: 
     ol = ollama_models()
     gpu = cached_gpu()
 
-    # Route intent
-    route = route_intent(message)
-    intent = route["intent"]
+    # Route intent (use override if provided, else infer from message)
+    if intent_override and intent_override in AGENTS:
+        intent = intent_override
+        route = AGENTS.get(intent, route_intent(message))
+        # For non-chat intents, ensure we have a system prompt
+        if "system" not in route:
+            fallback = route_intent(message)
+            route = {**fallback, **route}
+    else:
+        route = route_intent(message)
+        intent = route["intent"]
 
     # Pick model
     if model_override and model_override in ol["models"]:
@@ -655,6 +663,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             message  = body.get("message", "").strip()
             history  = body.get("history", [])
             model_ov = body.get("model") or None
+            intent_ov = body.get("intent") or None
             files    = body.get("files") or []
 
             if not message and not files:
@@ -665,7 +674,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             self._sse_headers()
             try:
-                for chunk in stream_chat(message, history, model_ov, files):
+                for chunk in stream_chat(message, history, model_ov, files, intent_ov):
                     self.wfile.write(chunk.encode("utf-8"))
                     self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError):
@@ -1178,7 +1187,7 @@ async function send() {
   try {
     const resp = await fetch('/api/chat', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({message:text||'Analyze attached files.',history:history.slice(-10),model:currentModel||null,files:filesToSend})
+      body: JSON.stringify({message:text||'Analyze attached files.',history:history.slice(-10),model:currentModel||null,intent:currentIntent||'chat',files:filesToSend})
     });
     if (!resp.ok) throw new Error('HTTP '+resp.status);
 
@@ -1276,6 +1285,7 @@ function renderAgents(agents) {
     d.className='sk-item'+(active?' active-sk':'');
     d.style.color=active?a.color:'';
     d.innerHTML=`<div class="dot" style="background:${active?a.color:'var(--br)'}"></div>${a.icon} ${a.name}`;
+    d.onclick=()=>{ currentIntent=a.id; renderAgents(agents); const inp=document.getElementById('inp'); inp.focus(); };
     list.appendChild(d);
   });
 }
