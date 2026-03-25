@@ -1462,10 +1462,11 @@ async function sendMessage() {
       const lines = buf.split('\n');
       buf = lines.pop();
 
+      let streamDone = false;
       for(const line of lines) {
         if(!line.startsWith('data: ')) continue;
         const data = line.slice(6);
-        if(data === '[DONE]') break;
+        if(data === '[DONE]') { streamDone = true; break; }
         if(data.startsWith('{')) {
           try {
             const ev = JSON.parse(data);
@@ -1488,6 +1489,7 @@ async function sendMessage() {
         const token = data.replace(/\\n/g, '\n');
         full += token;
       }
+      if(streamDone) break;
     }
 
     if(full) addMessage('ai', full.replace(/</g,'&lt;').replace(/>/g,'&gt;'));
