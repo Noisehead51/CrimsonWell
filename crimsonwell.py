@@ -982,6 +982,84 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except Exception as e:
                 self._json({"ok": False, "error": str(e)})
 
+        elif self.path == "/api/list-files":
+            # List files in a directory (for file tree)
+            path = body.get("path", ".").strip()
+            try:
+                resolved = os.path.abspath(os.path.expanduser(path))
+                if not os.path.isdir(resolved):
+                    self._json({"error": "not a directory"}, 400)
+                    return
+                items = []
+                for name in sorted(os.listdir(resolved))[:100]:
+                    if name.startswith('.'):
+                        continue
+                    full = os.path.join(resolved, name)
+                    try:
+                        items.append({
+                            "name": name,
+                            "type": "dir" if os.path.isdir(full) else "file",
+                            "path": full,
+                            "size": os.path.getsize(full) if os.path.isfile(full) else None,
+                        })
+                    except:
+                        pass
+                self._json({"items": items, "path": resolved})
+            except Exception as e:
+                self._json({"error": str(e)}, 400)
+
+        elif self.path == "/api/read-file":
+            # Read file content (for editor)
+            path = body.get("path", "").strip()
+            try:
+                resolved = os.path.abspath(os.path.expanduser(path))
+                if not os.path.isfile(resolved):
+                    self._json({"error": "not a file"}, 400)
+                    return
+                with open(resolved, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+                self._json({"content": content, "path": resolved})
+            except Exception as e:
+                self._json({"error": str(e)}, 400)
+
+        elif self.path == "/api/write-file":
+            # Write file content (from editor)
+            path = body.get("path", "").strip()
+            content = body.get("content", "")
+            try:
+                resolved = os.path.abspath(os.path.expanduser(path))
+                os.makedirs(os.path.dirname(resolved), exist_ok=True)
+                with open(resolved, "w", encoding="utf-8") as f:
+                    f.write(content)
+                self._json({"ok": True, "path": resolved})
+            except Exception as e:
+                self._json({"error": str(e)}, 400)
+
+        elif self.path == "/api/exec-command":
+            # Execute shell command (for /run slash command)
+            cmd = body.get("cmd", "").strip()
+            cwd = body.get("cwd", ".").strip()
+            try:
+                resolved_cwd = os.path.abspath(os.path.expanduser(cwd))
+                result = subprocess.run(
+                    cmd,
+                    shell=True,
+                    cwd=resolved_cwd,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                self._json({
+                    "ok": True,
+                    "returncode": result.returncode,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                })
+            except subprocess.TimeoutExpired:
+                self._json({"error": "command timeout (30s)"}, 400)
+            except Exception as e:
+                self._json({"error": str(e)}, 400)
+
         else:
             self.send_response(404)
             self.end_headers()
@@ -1196,42 +1274,118 @@ async function updateStatus() {
 // FILE TREE
 async function loadFileTree(path = '.') {
   try {
-    const res = await fetch('/api/chat', {
+    const res = await fetch('/api/list-files', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({message:`list files in ${path}`,history:[],intent:'agent',model:null,files:[]})
+      body: JSON.stringify({path: path})
     });
-    // Parse response to build tree
+    const data = await res.json();
     const tree = document.getElementById('file-tree');
-    tree.innerHTML = '<div class="file-item file selected" onclick="selectFile(this)">index.py</div>';
-  } catch(e) {}
+    tree.innerHTML = '';
+    if(data.items) {
+      data.items.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'file-item ' + item.type;
+        div.textContent = '  '.repeat(0) + (item.type==='dir' ? '📁 ' : '📄 ') + item.name;
+        div.onclick = function() { selectFile(this, item); };
+        tree.appendChild(div);
+      });
+    }
+  } catch(e) {
+    addTerminalLine('Error loading files: ' + e.message, 'err');
+  }
 }
 
-function selectFile(el) {
+function selectFile(el, item) {
   document.querySelectorAll('.file-item').forEach(f => f.classList.remove('selected'));
   el.classList.add('selected');
-  selectedFile = el.textContent.trim().split(' ')[1] || el.textContent.trim();
-  if(currentTab === 1) loadFileInEditor(selectedFile);
+  selectedFile = item.path;
+  document.getElementById('editor-path').textContent = item.name;
+  if(item.type === 'file' && currentTab === 1) {
+    loadFileInEditor(selectedFile);
+  } else if(item.type === 'dir') {
+    loadFileTree(selectedFile);
+  }
 }
 
 // EDITOR
-async function loadFileInEditor(filename) {
+async function loadFileInEditor(filepath) {
   const editor = document.getElementById('code-editor');
-  editor.textContent = '// File: ' + filename + '\n// Loading...';
-  // In a real implementation, would fetch file content via API
+  editor.textContent = 'Loading...';
+  try {
+    const res = await fetch('/api/read-file', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({path: filepath})
+    });
+    const data = await res.json();
+    if(data.error) {
+      editor.textContent = 'Error: ' + data.error;
+    } else {
+      editor.textContent = data.content;
+    }
+  } catch(e) {
+    editor.textContent = 'Error loading file: ' + e.message;
+  }
 }
 
-function saveFile() {
-  if(!selectedFile) return;
+async function saveFile() {
+  if(!selectedFile) {
+    addTerminalLine('No file selected', 'err');
+    return;
+  }
   const content = document.getElementById('code-editor').textContent;
-  console.log('Saving', selectedFile, ':', content.length, 'bytes');
-  addTerminalLine(`Saved ${selectedFile}`, 'ok');
+  try {
+    const res = await fetch('/api/write-file', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({path: selectedFile, content: content})
+    });
+    const data = await res.json();
+    if(data.error) {
+      addTerminalLine('Save error: ' + data.error, 'err');
+    } else {
+      addTerminalLine('Saved ' + selectedFile, 'ok');
+    }
+  } catch(e) {
+    addTerminalLine('Save failed: ' + e.message, 'err');
+  }
 }
 
 function closeFile() {
   selectedFile = null;
   document.getElementById('code-editor').textContent = '';
   document.getElementById('editor-path').textContent = 'No file selected';
+}
+
+async function executeCommand(cmd) {
+  try {
+    const res = await fetch('/api/exec-command', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({cmd: cmd, cwd: '.'})
+    });
+    const data = await res.json();
+    if(data.error) {
+      addTerminalLine('Error: ' + data.error, 'err');
+    } else {
+      if(data.stdout) {
+        data.stdout.split('\n').forEach(line => {
+          if(line) addTerminalLine(line, data.returncode === 0 ? 'ok' : 'err');
+        });
+      }
+      if(data.stderr) {
+        data.stderr.split('\n').forEach(line => {
+          if(line) addTerminalLine(line, 'err');
+        });
+      }
+      if(data.returncode !== 0) {
+        addTerminalLine(`Process exited with code ${data.returncode}`, 'err');
+      }
+    }
+  } catch(e) {
+    addTerminalLine('Command failed: ' + e.message, 'err');
+  }
 }
 
 // MESSAGES
@@ -1362,8 +1516,8 @@ function handleSlashCommand(cmd) {
       break;
     case 'run':
       const cmd_str = parts.slice(1).join(' ') || 'python main.py';
-      addTerminalLine('$ ' + cmd_str);
-      // Would execute via API
+      addTerminalLine('$ ' + cmd_str, '');
+      executeCommand(cmd_str);
       break;
     case 'clear':
       clearTerminal();
