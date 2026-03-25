@@ -120,6 +120,26 @@ AGENTS = {
             "Show results after each step."
         ),
     },
+    "system": {
+        "name": "System",
+        "icon": "⚙️",
+        "color": "#6366f1",
+        "keywords": [
+            "system", "install", "debug", "diagnose", "troubleshoot", "fix",
+            "process", "service", "driver", "memory", "disk", "cpu", "performance",
+            "error", "crash", "freeze", "slow", "battery", "network", "wifi",
+            "windows", "version", "update", "reboot", "restart", "shutdown",
+            "environment", "variable", "registry", "admin", "elevated"
+        ],
+        "system": (
+            "You are a Windows PC system agent. Help debug, diagnose, and fix system issues. "
+            "You can: check system health, install packages, manage services, view processes, "
+            "diagnose problems, and run administrative commands. "
+            "Always ask before running potentially destructive commands. "
+            "Use get_system_info, check_disk, get_processes to diagnose issues. "
+            "Explain what you find in clear terms, then recommend fixes."
+        ),
+    },
     "chat": {
         "name": "Chat",
         "icon": "💬",

@@ -352,6 +352,66 @@ def execute_tool(tool_name: str, args: dict) -> str:
             except Exception as e:
                 return f"[ERROR] {str(e)[:200]}"
 
+        elif tool_name == "get_system_info":
+            try:
+                import platform, psutil
+                info = []
+                info.append(f"OS: {platform.system()} {platform.release()}")
+                info.append(f"Python: {platform.python_version()}")
+                info.append(f"CPU: {psutil.cpu_percent(interval=1)}% · {psutil.cpu_count()} cores")
+                info.append(f"RAM: {psutil.virtual_memory().percent}% used")
+                info.append(f"Disk: {psutil.disk_usage('/').percent}% used")
+                return "\n".join(info)
+            except ImportError:
+                return "[WARN] psutil not installed. Run: pip install psutil"
+            except Exception as e:
+                return f"[ERROR] {str(e)[:200]}"
+
+        elif tool_name == "get_processes":
+            try:
+                import psutil
+                top = sorted(psutil.process_iter(['pid','name','memory_percent']),
+                           key=lambda p: p.info['memory_percent'], reverse=True)[:10]
+                lines = ["PID    NAME                          MEM%"]
+                for p in top:
+                    lines.append(f"{p.info['pid']:5} {p.info['name'][:28]:28} {p.info['memory_percent']:5.1f}%")
+                return "\n".join(lines)
+            except ImportError:
+                return "[WARN] psutil not installed. Run: pip install psutil"
+            except Exception as e:
+                return f"[ERROR] {str(e)[:200]}"
+
+        elif tool_name == "check_disk":
+            try:
+                import psutil
+                parts = psutil.disk_partitions()
+                lines = []
+                for p in parts:
+                    usage = psutil.disk_usage(p.mountpoint)
+                    pct = usage.percent
+                    status = "🔴 FULL" if pct > 90 else "🟡 HIGH" if pct > 75 else "🟢 OK"
+                    lines.append(f"{p.device:10} {p.mountpoint:20} {pct:5.1f}% {status}")
+                return "\n".join(lines) if lines else "(no partitions found)"
+            except ImportError:
+                return "[WARN] psutil not installed. Run: pip install psutil"
+            except Exception as e:
+                return f"[ERROR] {str(e)[:200]}"
+
+        elif tool_name == "install_package":
+            pkg = args.get("package", "").strip()
+            mgr = args.get("manager", "pip").lower()  # pip, npm, choco, apt
+            if not pkg:
+                return "[ERROR] package name required"
+            if mgr not in ["pip", "npm", "choco", "apt"]:
+                return f"[ERROR] unsupported package manager: {mgr}"
+            cmd_map = {
+                "pip": f"pip install {pkg}",
+                "npm": f"npm install -g {pkg}",
+                "choco": f"choco install -y {pkg}",
+                "apt": f"apt-get install -y {pkg}",
+            }
+            return execute_tool("run_cmd", {"cmd": cmd_map[mgr]})
+
         else:
             return f"[ERROR] Unknown tool: {tool_name}"
 
@@ -385,6 +445,10 @@ run_python    | {{"code":"print('hello')"}}                   | Execute Python s
 fetch_url     | {{"url":"https://example.com"}}               | Fetch URL content
 web_search    | {{"query":"what is python"}}                  | Search the web (DuckDuckGo)
 open_url      | {{"url":"https://..."}}                       | Open URL in browser
+get_system_info | {{}}                                         | CPU, RAM, disk, OS info
+get_processes | {{}}                                          | Top processes by memory
+check_disk    | {{}}                                          | Disk usage per partition
+install_package | {{"package":"numpy","manager":"pip"}}      | Install via pip/npm/choco/apt
 
 WORKFLOW (follow this every time):
 1. EXPLORE: list_dir / glob / grep to understand the project structure
