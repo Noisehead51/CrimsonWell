@@ -38,6 +38,7 @@ try:
         discover_models, benchmark_model, compare_models, safe_swap_model,
         discover_skills, validate_skill, get_update_status
     )
+    from core.model_selector import select_model, set_speed_preference
     _CORE_OK = True
 except ImportError as e:
     print(f"[warn] Core module import failed: {e} — using built-in fallbacks")
@@ -624,11 +625,16 @@ def stream_chat(message: str, history: list, model_override: str | None, files: 
         route = route_intent(message)
         intent = route["intent"]
 
-    # Pick model
+    # Pick model (use smart selector by default, override if specified)
     if model_override and model_override in ol["models"]:
         model = model_override
     elif ol["models"]:
-        model = pick_model(ol["models"], intent, gpu["vram_mb"])
+        # Smart model selection based on intent + VRAM + benchmarks
+        try:
+            model = select_model(ol["models"], intent, gpu["vram_mb"])
+        except:
+            # Fallback to old method if smart selector fails
+            model = pick_model(ol["models"], intent, gpu["vram_mb"])
     else:
         yield 'data: {"type":"error","msg":"No models installed. Run SETUP.bat or: ollama pull llama3.2:3b"}\n\n'
         yield "data: [DONE]\n\n"
@@ -873,6 +879,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # Get current update status
             status = get_update_status()
             self._json(status)
+
+        elif self.path == "/api/set-speed-preference":
+            # Set speed vs quality preference (0=fast, 1=quality)
+            pref = body.get("preference")
+            if pref is None or not (0 <= pref <= 1):
+                self._json({"error": "preference must be 0-1"}, 400)
+                return
+            try:
+                set_speed_preference(pref)
+                self._json({"ok": True, "preference": pref})
+            except Exception as e:
+                self._json({"error": str(e)}, 500)
 
         elif self.path == "/api/agent":
             # Kick off an autonomous agent task (uses agent_engine if available)
