@@ -857,7 +857,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="inp-area">
       <div id="file-chips" class="file-chips"></div>
       <div class="inp-row">
-        <button class="attach-btn" onclick="document.getElementById('file-input').click()">+ File</button>
+        <label class="attach-btn" for="file-input">+ File</label>
         <input type="file" id="file-input" multiple style="display:none" onchange="handleFiles(this.files)">
         <div class="inp-wrap">
           <textarea id="inp" placeholder="Chat, write code, run agent tasks, analyze files..." rows="1"></textarea>
