@@ -311,6 +311,47 @@ def execute_tool(tool_name: str, args: dict) -> str:
                 return f"[OK] Opened {url}"
             return "[ERROR] Only http/https URLs"
 
+        elif tool_name == "fetch_url":
+            url = args.get("url", "")
+            if not url.startswith(("http://", "https://")):
+                return "[ERROR] Only http/https URLs"
+            try:
+                req = urllib.request.Request(
+                    url,
+                    headers={"User-Agent": "CrimsonWell/1.0 (local AI assistant)"}
+                )
+                with urllib.request.urlopen(req, timeout=15) as r:
+                    content = r.read(100000).decode("utf-8", errors="replace")
+                return content[:8000]
+            except urllib.error.HTTPError as e:
+                return f"[HTTP {e.code}] {e.reason}"
+            except Exception as e:
+                return f"[ERROR] {str(e)[:200]}"
+
+        elif tool_name == "web_search":
+            query = args.get("query", "").strip()
+            if not query:
+                return "[ERROR] query is required"
+            try:
+                # Use DuckDuckGo's simple search (no API key needed)
+                search_url = f"https://duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+                req = urllib.request.Request(
+                    search_url,
+                    headers={"User-Agent": "CrimsonWell/1.0 (local AI assistant)"}
+                )
+                with urllib.request.urlopen(req, timeout=15) as r:
+                    html = r.read(50000).decode("utf-8", errors="replace")
+                # Extract title tags (DDG result titles)
+                import re
+                titles = re.findall(r'<a[^>]*href="([^"]*)"[^>]*title="([^"]*)"', html)
+                results = []
+                for url, title in titles[:5]:
+                    if url and title and not url.startswith('javascript:'):
+                        results.append(f"• {title}\n  {url}")
+                return "\n".join(results) if results else "(no results found)"
+            except Exception as e:
+                return f"[ERROR] {str(e)[:200]}"
+
         else:
             return f"[ERROR] Unknown tool: {tool_name}"
 
@@ -323,7 +364,7 @@ def execute_tool(tool_name: str, args: dict) -> str:
 
 _AGENT_SYSTEM = """\
 You are CrimsonWell Agent — a local AI assistant that works like Claude Code.
-You have tools to read/write/edit files, run commands, search code, and more.
+You have tools to read/write/edit files, run commands, search code, access the internet, and more.
 
 Working directory: {cwd}
 
@@ -341,6 +382,8 @@ edit_file     | {{"path":"file.py","old_str":"exact text","new_str":"replacement
 write_file    | {{"path":"file.py","content":"..."}}          | Create or overwrite file
 run_cmd       | {{"cmd":"python main.py"}}                    | Run shell command in cwd
 run_python    | {{"code":"print('hello')"}}                   | Execute Python snippet
+fetch_url     | {{"url":"https://example.com"}}               | Fetch URL content
+web_search    | {{"query":"what is python"}}                  | Search the web (DuckDuckGo)
 open_url      | {{"url":"https://..."}}                       | Open URL in browser
 
 WORKFLOW (follow this every time):
@@ -356,6 +399,7 @@ RULES:
 - Relative paths resolve against cwd: {cwd}
 - Explain your reasoning before each tool call
 - If something fails, diagnose and try a different approach
+- Use web_search / fetch_url when you need current info or to verify facts
 """
 
 _TOOL_RE = re.compile(r'<tool>(.*?)</tool>', re.DOTALL)
