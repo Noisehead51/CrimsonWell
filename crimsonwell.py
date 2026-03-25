@@ -34,10 +34,21 @@ try:
     from core.vram_planner import pick_model, get_recommendations, MODEL_CATALOG, model_fits
     from core.intent_router import route_intent, AGENTS, needs_clarification
     from core.usage_learner import record as record_usage, get_last_model, prewarm_top
+    from core.update_engine import (
+        discover_models, benchmark_model, compare_models, safe_swap_model,
+        discover_skills, validate_skill, get_update_status
+    )
     _CORE_OK = True
 except ImportError as e:
     print(f"[warn] Core module import failed: {e} — using built-in fallbacks")
     _CORE_OK = False
+    def discover_models(limit=20): return []
+    def benchmark_model(name, prompt=None): return {}
+    def compare_models(old, new, prompt=None): return {}
+    def safe_swap_model(old, new, intent): return {"ok": False, "error": "update_engine not loaded"}
+    def discover_skills(): return []
+    def validate_skill(path): return {"ok": False}
+    def get_update_status(): return {}
 
 PORT   = 3000
 OLLAMA = "http://localhost:11434"
@@ -808,6 +819,61 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ollama_pull_bg(model)
             self._json({"ok": True, "msg": f"Downloading {model} in background..."})
 
+        elif self.path == "/api/discover-models":
+            # Discover new models from Ollama library
+            limit = body.get("limit", 20)
+            models = discover_models(limit)
+            self._json({"models": models})
+
+        elif self.path == "/api/benchmark":
+            # Benchmark a model
+            model = body.get("model", "").strip()
+            if not model:
+                self._json({"error": "model required"}, 400)
+                return
+            result = benchmark_model(model)
+            self._json(result)
+
+        elif self.path == "/api/compare-models":
+            # Compare two models
+            old_model = body.get("old_model", "").strip()
+            new_model = body.get("new_model", "").strip()
+            if not old_model or not new_model:
+                self._json({"error": "both models required"}, 400)
+                return
+            result = compare_models(old_model, new_model)
+            self._json(result)
+
+        elif self.path == "/api/swap-model":
+            # Safely swap a model
+            old = body.get("old_model", "").strip()
+            new = body.get("new_model", "").strip()
+            intent = body.get("intent", "chat").strip()
+            if not old or not new:
+                self._json({"error": "both models required"}, 400)
+                return
+            result = safe_swap_model(old, new, intent)
+            self._json(result)
+
+        elif self.path == "/api/discover-skills":
+            # Discover available skills
+            skills = discover_skills()
+            self._json({"skills": skills})
+
+        elif self.path == "/api/validate-skill":
+            # Validate a skill file
+            path = body.get("path", "").strip()
+            if not path:
+                self._json({"error": "path required"}, 400)
+                return
+            result = validate_skill(path)
+            self._json(result)
+
+        elif self.path == "/api/update-status":
+            # Get current update status
+            status = get_update_status()
+            self._json(status)
+
         elif self.path == "/api/agent":
             # Kick off an autonomous agent task (uses agent_engine if available)
             task  = body.get("task", "").strip()
@@ -928,6 +994,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .chip{display:flex;align-items:center;gap:4px;background:var(--s2);border:1px solid var(--br);border-radius:4px;padding:2px 7px;font-size:11px;color:var(--mu)}
 .chip .rm{cursor:pointer;margin-left:2px;opacity:.6}.chip .rm:hover{color:#ef4444;opacity:1}
 .chip.img{border-color:#3b82f6;color:#3b82f6}
+.update-btn{width:100%;background:var(--c);color:#fff;border:none;border-radius:5px;padding:6px;font-size:11px;cursor:pointer;font-weight:600;transition:background .15s;margin-bottom:8px}
+.update-btn:hover{background:var(--cd)}
+.update-item{padding:6px;margin:4px 0;background:#111;border-radius:3px;border-left:2px solid var(--c);font-size:10px}
+.update-item.ok{border-left-color:var(--gr)}
+.update-item.warn{border-left-color:var(--yl)}
 ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--br);border-radius:2px}
 @media(max-width:580px){.sb{display:none}.model-tag{display:none}.cwd-bar{display:none}}
 </style>
@@ -964,6 +1035,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="sb-sec">
       <div class="sb-title">Agents</div>
       <div id="agent-list"></div>
+    </div>
+    <div class="sb-sec">
+      <div class="sb-title">Updates</div>
+      <button class="update-btn" onclick="showUpdatesTab()">🔄 Check Updates</button>
+      <div id="update-panel" style="display:none;margin-top:10px;padding:10px;background:var(--s2);border-radius:5px;font-size:11px">
+        <div id="update-status">Checking...</div>
+      </div>
     </div>
   </div>
 
@@ -1418,6 +1496,80 @@ document.getElementById('inp').addEventListener('keydown',function(e){ if(e.key=
 renderQA();
 updateStatus();
 setInterval(updateStatus, 5000);
+
+// ─── UPDATES TAB ─────────────────────────────────────────────────────────
+async function showUpdatesTab() {
+  const panel = document.getElementById('update-panel');
+  panel.style.display = 'block';
+  const statusDiv = document.getElementById('update-status');
+  statusDiv.innerHTML = '<div class="update-item">Checking for new models...</div>';
+
+  try {
+    // Get update status
+    const res = await fetch('/api/update-status');
+    const data = await res.json();
+
+    let html = '';
+
+    // Show discovered models
+    if (data.discovered_count > 0) {
+      html += `<div class="update-item ok">📦 ${data.discovered_count} new models found</div>`;
+    }
+
+    // Show recent swaps
+    if (data.recent_swaps && data.recent_swaps.length > 0) {
+      html += `<div class="update-item">📊 Recent upgrades:</div>`;
+      data.recent_swaps.forEach(s => {
+        html += `<div style="font-size:9px;margin-left:8px;color:#888">${s.old_model.split(':')[0]} → ${s.new_model.split(':')[0]}</div>`;
+      });
+    }
+
+    // Show skills
+    if (data.available_skills && data.available_skills.length > 0) {
+      html += `<div class="update-item">⚙️ ${data.available_skills.length} skills available</div>`;
+    }
+
+    html += `<div style="margin-top:8px;font-size:9px;color:#666">Last checked: ${data.last_checked || 'Never'}</div>`;
+    statusDiv.innerHTML = html || '<div class="update-item warn">No updates available</div>';
+  } catch(e) {
+    statusDiv.innerHTML = `<div class="update-item">Error: ${e.message}</div>`;
+  }
+}
+
+async function benchmarkAndSwap(oldModel, newModel) {
+  const inp = document.getElementById('inp');
+  inp.value = `Compare and swap: ${oldModel} → ${newModel}`;
+
+  addMsg('ai', 'Starting benchmark comparison... This may take a minute.');
+
+  try {
+    const res = await fetch('/api/compare-models', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({old_model: oldModel, new_model: newModel})
+    });
+    const result = await res.json();
+
+    if (result.recommend_swap) {
+      addMsg('ai', fmt(`✅ **New model is ${result.delta_percent}% better!**\n\nOld: ${result.old_score}/100\nNew: ${result.new_score}/100\n\nRecommend swap to \`${newModel}\``));
+
+      // Auto-swap
+      const swapRes = await fetch('/api/swap-model', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({old_model: oldModel, new_model: newModel, intent: 'auto'})
+      });
+      const swapResult = await swapRes.json();
+      if (swapResult.ok) {
+        addMsg('ai', `✅ Swapped! ${swapResult.message}`);
+      }
+    } else {
+      addMsg('ai', fmt(`Current model still better.\n\nOld: ${result.old_score}/100\nNew: ${result.new_score}/100`));
+    }
+  } catch(e) {
+    addMsg('ai', `Error: ${e.message}`);
+  }
+}
 </script>
 </body>
 </html>"""
