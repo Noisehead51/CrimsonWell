@@ -994,680 +994,414 @@ HTML = r"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>CrimsonWell</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <style>
-:root{--c:#dc2626;--cd:#991b1b;--cg:rgba(220,38,38,.12);--bg:#0d0d0d;--s1:#161616;--s2:#1f1f1f;--br:#2a2a2a;--tx:#e5e5e5;--mu:#6b7280;--gr:#22c55e;--yl:#eab308}
+:root{--c:#dc2626;--cd:#991b1b;--bg:#0d0d0d;--s1:#161616;--s2:#1f1f1f;--br:#2a2a2a;--tx:#e5e5e5;--mu:#6b7280;--gr:#22c55e;--yl:#eab308}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);height:100vh;overflow:hidden;display:flex;flex-direction:column;font-size:14px}
-.hdr{display:flex;align-items:center;gap:10px;padding:7px 14px;background:var(--s1);border-bottom:1px solid var(--br);flex-shrink:0;min-height:42px}
-.logo{font-weight:700;font-size:16px;color:var(--c);letter-spacing:-.5px;white-space:nowrap}
-.logo sub{font-size:10px;color:var(--mu);font-weight:400;vertical-align:middle}
-.badge{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--mu);background:var(--s2);padding:3px 8px;border-radius:5px;border:1px solid var(--br);white-space:nowrap}
-.dot{width:6px;height:6px;border-radius:50%;background:var(--br);flex-shrink:0}
-.vbar-wrap{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--mu)}
-.vbar{width:60px;height:4px;background:var(--s2);border-radius:3px;overflow:hidden;border:1px solid var(--br)}
-.vfill{height:100%;background:var(--c);border-radius:3px;transition:width .5s,background .5s}
-.agent-badge{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:11px;padding:3px 9px;border-radius:5px;border:1px solid var(--c);color:var(--c);background:var(--cg);transition:all .3s;white-space:nowrap}
-.model-tag{font-size:10px;color:var(--mu);border-left:1px solid var(--br);padding-left:6px;margin-left:2px}
-.cwd-bar{display:flex;align-items:center;gap:8px;padding:4px 14px;background:#111;border-bottom:1px solid var(--br);font-size:11px;color:var(--mu);flex-shrink:0}
-.cwd-bar span{color:var(--mu)}
-#cwd-path{color:var(--tx);font-family:'Consolas','Courier New',monospace;font-size:11px;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cwd-btn{background:none;border:1px solid var(--br);border-radius:3px;color:var(--mu);padding:1px 6px;font-size:10px;cursor:pointer;transition:all .15s}
-.cwd-btn:hover{border-color:var(--c);color:var(--c)}
+html,body{height:100%;width:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);font-size:13px}
+body{display:flex;flex-direction:column;overflow:hidden}
+
+/* HEADER */
+.header{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--s1);border-bottom:1px solid var(--br);height:50px;flex-shrink:0}
+.logo{font-weight:700;font-size:15px;color:var(--c);letter-spacing:-.5px}
+.gpu-badge{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--mu);background:var(--s2);padding:4px 10px;border-radius:4px;border:1px solid var(--br)}
+.vbar{width:80px;height:3px;background:var(--s2);border-radius:2px;overflow:hidden}
+.vfill{height:100%;background:var(--c);border-radius:2px;transition:width .3s}
+.spacer{flex:1}
+.agent-badge{display:flex;align-items:center;gap:6px;padding:4px 10px;background:rgba(220,38,38,.1);border:1px solid var(--c);border-radius:4px;font-size:11px;color:var(--c)}
+
+/* MAIN LAYOUT */
 .main{display:flex;flex:1;overflow:hidden}
-.sb{width:185px;flex-shrink:0;background:var(--s1);border-right:1px solid var(--br);overflow-y:auto;padding:10px 0}
-.sb-sec{padding:0 10px 10px}
-.sb-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--mu);margin-bottom:5px}
-.m-item{display:flex;align-items:center;gap:5px;padding:4px 5px;border-radius:4px;cursor:pointer;font-size:11px;color:var(--mu);transition:all .15s;user-select:none}
-.m-item:hover{background:var(--s2);color:var(--tx)}
-.m-item.active{color:var(--c);background:var(--cg)}
-.m-item.loaded .dot{background:var(--gr)}
-.m-vram{font-size:9px;margin-left:auto;color:var(--mu)}
-.pull-btn{font-size:9px;padding:1px 5px;background:var(--s2);border:1px solid var(--br);border-radius:3px;color:var(--mu);cursor:pointer;margin-left:auto;transition:all .15s}
-.pull-btn:hover{border-color:var(--c);color:var(--c)}
-.sk-item{display:flex;align-items:center;gap:5px;padding:3px 5px;font-size:11px;color:var(--mu);border-radius:4px}
-.sk-item.active-sk{color:var(--tx)}
-.chat{flex:1;display:flex;flex-direction:column;overflow:hidden}
-#alerts{flex-shrink:0}
-.alert{margin:6px 12px;padding:6px 10px;border-radius:5px;font-size:11px;border:1px solid var(--br);display:flex;align-items:center;gap:6px}
-.alert.warn{border-color:var(--yl);color:var(--yl);background:rgba(234,179,8,.08)}
-.alert.info{border-color:var(--c);color:var(--mu);background:var(--cg)}
-.msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px}
-.msg{display:flex;gap:9px;max-width:900px;animation:fadein .15s ease}
-@keyframes fadein{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
-.msg.user{flex-direction:row-reverse;margin-left:auto}
-.avatar{width:24px;height:24px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;margin-top:3px;font-weight:700}
-.msg.user .avatar{background:var(--c);color:#fff}
-.msg.ai .avatar{background:var(--s2);border:1px solid var(--br);color:var(--mu)}
-.cwrap{display:flex;flex-direction:column;gap:4px;max-width:720px}
-.bubble{background:var(--s1);border:1px solid var(--br);border-radius:8px;padding:9px 13px;font-size:13px;line-height:1.65;word-break:break-word}
-.msg.user .bubble{background:var(--cg);border-color:var(--c)}
-.meta-line{font-size:9px;color:var(--mu);padding:0 2px}
-.bubble pre{background:#090909;border:1px solid var(--br);border-radius:5px;padding:9px;overflow-x:auto;margin:7px 0;font-size:11px;font-family:'Consolas','Courier New',monospace}
-.bubble code{font-family:'Consolas','Courier New',monospace;font-size:11px;background:#111;padding:1px 4px;border-radius:3px}
-.bubble pre code{background:none;padding:0}
-.bubble strong{color:var(--tx)}
-.bubble h1,.bubble h2,.bubble h3{font-size:13px;margin:8px 0 4px;color:var(--tx)}
-.bubble ul,.bubble ol{padding-left:18px;margin:4px 0}
-.bubble li{margin:2px 0}
-.bubble a{color:var(--c);text-decoration:none}
-.bubble a:hover{text-decoration:underline}
-.typing span{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--c);margin:0 2px;animation:bounce 1s infinite}
-.typing span:nth-child(2){animation-delay:.2s}
-.typing span:nth-child(3){animation-delay:.4s}
-@keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
-.tool-step{border:1px solid var(--br);border-radius:5px;overflow:hidden;font-size:11px;font-family:'Consolas','Courier New',monospace}
-.tool-step.ok>.tool-hdr{border-left:3px solid var(--gr)}
-.tool-step.err>.tool-hdr{border-left:3px solid #ef4444}
-.tool-step.pending>.tool-hdr{border-left:3px solid var(--yl)}
-.tool-hdr{display:flex;align-items:center;gap:7px;padding:5px 9px;background:var(--s2);cursor:pointer;user-select:none;min-height:28px}
-.tool-hdr:hover{background:var(--br)}
-.tool-ico{color:var(--c);font-weight:900;font-size:10px}
-.tool-nm{color:var(--tx);font-weight:700}
-.tool-ag{color:var(--mu);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tool-st{font-size:9px;padding:1px 5px;border-radius:3px;white-space:nowrap}
-.tool-step.pending .tool-st{background:rgba(234,179,8,.15);color:var(--yl)}
-.tool-step.ok .tool-st{background:rgba(34,197,94,.15);color:var(--gr)}
-.tool-step.err .tool-st{background:rgba(239,68,68,.15);color:#ef4444}
-.tool-body{display:none;padding:7px 9px;background:#0a0a0a;border-top:1px solid var(--br);max-height:220px;overflow-y:auto}
-.tool-step.open .tool-body,.tool-step.err.open .tool-body{display:block}
-.tool-body pre{font-size:10px;color:var(--mu);white-space:pre-wrap;word-break:break-all;margin:0;line-height:1.5}
-.qa{padding:5px 12px;display:flex;gap:5px;flex-wrap:wrap;border-top:1px solid var(--br);flex-shrink:0}
-.q-btn{font-size:11px;padding:3px 9px;background:var(--s2);border:1px solid var(--br);border-radius:10px;color:var(--mu);cursor:pointer;transition:all .15s;white-space:nowrap}
-.q-btn:hover{border-color:var(--c);color:var(--c);background:var(--cg)}
-.inp-area{display:flex;flex-direction:column;gap:5px;padding:8px 12px 10px;background:var(--s1);border-top:1px solid var(--br);flex-shrink:0}
-.inp-row{display:flex;gap:7px;align-items:flex-end}
-.inp-wrap{flex:1}
-#inp{width:100%;background:var(--s2);border:1px solid var(--br);border-radius:7px;color:var(--tx);font-size:13px;padding:9px 12px;outline:none;resize:none;min-height:40px;max-height:120px;font-family:inherit;transition:border-color .15s;line-height:1.5}
+
+/* LEFT SIDEBAR - FILE TREE */
+.sidebar{width:220px;background:var(--s1);border-right:1px solid var(--br);display:flex;flex-direction:column;overflow:hidden}
+.sidebar-title{padding:8px 12px;font-size:11px;font-weight:600;color:var(--mu);text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--br)}
+.file-tree{flex:1;overflow-y:auto;padding:8px 0}
+.file-item{padding:4px 8px;cursor:pointer;color:var(--mu);font-size:12px;user-select:none;transition:all .1s}
+.file-item:hover{background:var(--s2);color:var(--tx)}
+.file-item.selected{background:rgba(220,38,38,.15);color:var(--c);border-left:2px solid var(--c)}
+.file-item.dir::before{content:'📁 ';margin-right:2px}
+.file-item.file::before{content:'📄 ';margin-right:2px}
+.file-tree-empty{padding:12px;color:var(--mu);font-size:11px;text-align:center}
+
+/* CENTER - EDITOR + CHAT */
+.center{flex:1;display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--br)}
+.panel-tabs{display:flex;gap:0;padding:0;background:var(--s2);border-bottom:1px solid var(--br);height:40px;flex-shrink:0}
+.tab{padding:10px 16px;cursor:pointer;border-bottom:2px solid transparent;color:var(--mu);font-size:12px;transition:all .15s;user-select:none;white-space:nowrap}
+.tab:hover{color:var(--tx);background:var(--br)}
+.tab.active{color:var(--c);border-bottom-color:var(--c)}
+
+.tab-content{display:none;flex:1;overflow:hidden}
+.tab-content.active{display:flex}
+
+.editor-panel{display:flex;flex-direction:column;overflow:hidden}
+.editor-header{padding:8px 12px;background:var(--s2);border-bottom:1px solid var(--br);font-size:11px;color:var(--mu);display:flex;align-items:center;gap:8px}
+.editor-path{flex:1;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.editor-btn{background:none;border:none;color:var(--mu);cursor:pointer;padding:2px 6px;font-size:11px;transition:color .1s}
+.editor-btn:hover{color:var(--tx)}
+.editor-content{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.code-editor{flex:1;overflow-y:auto;padding:12px;font-family:'Consolas','Courier New',monospace;font-size:12px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word;background:var(--bg);color:var(--tx)}
+
+.chat-panel{display:flex;flex-direction:column;overflow:hidden}
+.messages{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+.msg{display:flex;gap:8px;max-width:85%;animation:fadein .15s ease}
+@keyframes fadein{from{opacity:0;transform:translateY(3px)}to{opacity:1}}
+.msg.user{flex-direction:row-reverse;margin-left:auto;max-width:90%}
+.msg-avatar{width:24px;height:24px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px}
+.msg.user .msg-avatar{background:var(--c);color:#fff}
+.msg.ai .msg-avatar{background:var(--s2);border:1px solid var(--br);color:var(--mu)}
+.msg-content{display:flex;flex-direction:column;gap:4px}
+.msg-bubble{background:var(--s1);border:1px solid var(--br);border-radius:6px;padding:10px 12px;font-size:12px;line-height:1.5;word-break:break-word}
+.msg.user .msg-bubble{background:rgba(220,38,38,.15);border-color:var(--c)}
+.msg-bubble code{font-family:monospace;background:#000;padding:2px 4px;border-radius:2px;font-size:11px}
+.msg-bubble pre{background:#000;padding:8px;border-radius:4px;overflow-x:auto;font-size:11px;margin:6px 0}
+
+.input-area{padding:12px;background:var(--s2);border-top:1px solid var(--br);flex-shrink:0}
+.input-row{display:flex;gap:8px;align-items:flex-end}
+#inp{flex:1;background:var(--s1);border:1px solid var(--br);color:var(--tx);border-radius:5px;padding:10px;font-family:inherit;font-size:12px;resize:none;min-height:36px;max-height:100px;outline:none}
 #inp:focus{border-color:var(--c)}
-#inp::placeholder{color:var(--mu)}
-.send{background:var(--c);color:#fff;border:none;border-radius:7px;padding:9px 16px;cursor:pointer;font-size:13px;font-weight:600;transition:background .15s;white-space:nowrap}
-.send:hover{background:var(--cd)}
-.send:disabled{opacity:.35;cursor:not-allowed}
-.attach-btn{background:var(--s2);color:var(--mu);border:1px solid var(--br);border-radius:7px;padding:9px 11px;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s;white-space:nowrap}
-.attach-btn:hover{border-color:var(--c);color:var(--c)}
-.file-chips{display:flex;flex-wrap:wrap;gap:5px}
-.chip{display:flex;align-items:center;gap:4px;background:var(--s2);border:1px solid var(--br);border-radius:4px;padding:2px 7px;font-size:11px;color:var(--mu)}
-.chip .rm{cursor:pointer;margin-left:2px;opacity:.6}.chip .rm:hover{color:#ef4444;opacity:1}
-.chip.img{border-color:#3b82f6;color:#3b82f6}
-.update-btn{width:100%;background:var(--c);color:#fff;border:none;border-radius:5px;padding:6px;font-size:11px;cursor:pointer;font-weight:600;transition:background .15s;margin-bottom:8px}
-.update-btn:hover{background:var(--cd)}
-.update-item{padding:6px;margin:4px 0;background:#111;border-radius:3px;border-left:2px solid var(--c);font-size:10px}
-.update-item.ok{border-left-color:var(--gr)}
-.update-item.warn{border-left-color:var(--yl)}
-::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--br);border-radius:2px}
-@media(max-width:580px){.sb{display:none}.model-tag{display:none}.cwd-bar{display:none}}
+.send-btn{background:var(--c);color:#fff;border:none;border-radius:5px;padding:10px 20px;font-weight:600;cursor:pointer;font-size:12px;transition:background .1s}
+.send-btn:hover{background:var(--cd)}
+.send-btn:disabled{opacity:.3;cursor:not-allowed}
+
+/* RIGHT SIDEBAR - TERMINAL */
+.terminal{width:280px;background:var(--s1);border-left:1px solid var(--br);display:flex;flex-direction:column;overflow:hidden}
+.terminal-title{padding:8px 12px;font-size:11px;font-weight:600;color:var(--mu);text-transform:uppercase;border-bottom:1px solid var(--br);display:flex;justify-content:space-between;align-items:center}
+.terminal-clear{background:none;border:none;color:var(--mu);cursor:pointer;font-size:10px;padding:2px 6px}
+.terminal-clear:hover{color:var(--tx)}
+.terminal-output{flex:1;overflow-y:auto;padding:10px;font-family:'Consolas','Courier New',monospace;font-size:11px;color:var(--mu);white-space:pre-wrap;word-wrap:break-word;line-height:1.4}
+.terminal-line{margin:2px 0}
+.terminal-line.ok{color:var(--gr)}
+.terminal-line.err{color:#ef4444}
+.terminal-line.tool{color:var(--c)}
+
+/* UTILITIES */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--s2)}
+::-webkit-scrollbar-thumb{background:var(--br);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#555}
+
+.hidden{display:none !important}
 </style>
 </head>
 <body>
 
-<div class="hdr">
-  <div class="logo">CrimsonWell <sub>local AI</sub></div>
-  <div class="badge" id="gpu-badge"><div class="dot" id="gpu-dot"></div><span id="gpu-name">...</span></div>
-  <div class="vbar-wrap"><div class="vbar"><div class="vfill" id="vfill" style="width:0%"></div></div><span id="vram-txt">-</span></div>
-  <div class="agent-badge" id="agent-badge">
+<!-- HEADER -->
+<div class="header">
+  <div class="logo">CrimsonWell</div>
+  <div class="gpu-badge">
+    <span id="gpu-name">GPU</span>
+    <div class="vbar"><div class="vfill" id="vfill" style="width:0%"></div></div>
+  </div>
+  <div class="spacer"></div>
+  <div class="agent-badge">
     <span id="agent-icon">AI</span>
     <span id="agent-name">Chat</span>
-    <span class="model-tag" id="model-tag"></span>
   </div>
 </div>
 
-<div class="cwd-bar">
-  <span>Project:</span>
-  <span id="cwd-path">~/Desktop</span>
-  <button class="cwd-btn" onclick="promptCwd()" title="Change project directory">change</button>
-</div>
-
+<!-- MAIN -->
 <div class="main">
-  <div class="sb">
-    <div class="sb-sec">
-      <div class="sb-title">Models</div>
-      <div id="model-list"></div>
+  <!-- LEFT: FILE TREE -->
+  <div class="sidebar">
+    <div class="sidebar-title">Project Files</div>
+    <div class="file-tree" id="file-tree">
+      <div class="file-tree-empty">No files</div>
     </div>
-    <div class="sb-sec" id="rec-sec" style="display:none">
-      <div class="sb-title">Fits Your GPU</div>
-      <div id="rec-list"></div>
+  </div>
+
+  <!-- CENTER: EDITOR + CHAT -->
+  <div class="center">
+    <!-- TABS -->
+    <div class="panel-tabs">
+      <div class="tab active" onclick="switchTab(0)">💬 Chat</div>
+      <div class="tab" onclick="switchTab(1)">📝 Editor</div>
+      <div class="tab" onclick="switchTab(2)">🤖 Plans</div>
     </div>
-    <div class="sb-sec">
-      <div class="sb-title">Agents</div>
-      <div id="agent-list"></div>
+
+    <!-- TAB 0: CHAT -->
+    <div class="tab-content active">
+      <div class="chat-panel">
+        <div class="messages" id="messages"></div>
+        <div class="input-area">
+          <div class="input-row">
+            <textarea id="inp" placeholder="Type a message or /help for commands..." rows="1"></textarea>
+            <button class="send-btn" id="send-btn" onclick="sendMessage()">Send</button>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="sb-sec">
-      <div class="sb-title">Updates</div>
-      <button class="update-btn" onclick="showUpdatesTab()">🔄 Check Updates</button>
-      <div id="update-panel" style="display:none;margin-top:10px;padding:10px;background:var(--s2);border-radius:5px;font-size:11px">
-        <div id="update-status">Checking...</div>
+
+    <!-- TAB 1: EDITOR -->
+    <div class="tab-content">
+      <div class="editor-panel">
+        <div class="editor-header">
+          <span class="editor-path" id="editor-path">No file selected</span>
+          <button class="editor-btn" id="save-btn" onclick="saveFile()" title="Save">Save</button>
+          <button class="editor-btn" onclick="closeFile()" title="Close">Close</button>
+        </div>
+        <div class="editor-content">
+          <div class="code-editor" id="code-editor" contenteditable="true"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: PLANS -->
+    <div class="tab-content">
+      <div style="flex:1;overflow-y:auto;padding:14px;color:var(--mu)">
+        <div id="plans-view">No plan yet. Agent will show reasoning here.</div>
       </div>
     </div>
   </div>
 
-  <div class="chat">
-    <div id="alerts"></div>
-    <div id="msgs" class="msgs"></div>
-    <div class="qa" id="qa"></div>
-    <div class="inp-area">
-      <div id="file-chips" class="file-chips"></div>
-      <div class="inp-row">
-        <label class="attach-btn" for="file-input">+ File</label>
-        <input type="file" id="file-input" multiple style="display:none" onchange="handleFiles(this.files)">
-        <div class="inp-wrap">
-          <textarea id="inp" placeholder="Chat, write code, run agent tasks, analyze files..." rows="1"></textarea>
-        </div>
-        <button class="send" id="send-btn" onclick="send()">Send</button>
-      </div>
+  <!-- RIGHT: TERMINAL -->
+  <div class="terminal">
+    <div class="terminal-title">
+      Terminal
+      <button class="terminal-clear" onclick="clearTerminal()">Clear</button>
     </div>
+    <div class="terminal-output" id="terminal"></div>
   </div>
 </div>
 
 <script>
 // STATE
 let history = [], currentModel = '', currentIntent = 'chat';
-let streaming = false, status = {}, attachedFiles = [], currentCwd = '';
+let streaming = false;
+let selectedFile = null;
+let currentTab = 0;
 
-const QUICK = [
-  {l:'Code', p:'Write a Python script that '},
-  {l:'Blender', p:'Write a Blender Python script to create '},
-  {l:'Research', p:'Research and explain: '},
-  {l:'Write', p:'Write a professional '},
-  {l:'Math', p:'Calculate: '},
-  {l:'Agent', p:'Do this for me autonomously: '},
-  {l:'Edit file', p:'Edit the file at '},
-  {l:'Debug', p:'Debug this error: '},
-];
+// TAB SWITCHING
+function switchTab(n) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', i===n));
+  document.querySelectorAll('.tab-content').forEach((c,i) => c.classList.toggle('active', i===n));
+  currentTab = n;
+  if(n===1 && selectedFile) loadFileInEditor(selectedFile);
+}
 
 // STATUS
 async function updateStatus() {
   try {
     const r = await fetch('/api/status');
-    status = await r.json();
-    document.getElementById('gpu-name').textContent = status.gpu_name || 'CPU';
-    document.getElementById('gpu-dot').style.background = status.ollama_ok ? '#22c55e' : '#dc2626';
-    if (status.vram_total > 0) {
-      const pct = Math.round(status.vram_used / status.vram_total * 100);
-      const fill = document.getElementById('vfill');
-      fill.style.width = pct + '%';
-      fill.style.background = pct > 85 ? '#ef4444' : pct > 65 ? '#eab308' : '#dc2626';
-      document.getElementById('vram-txt').textContent =
-        (status.vram_used/1024).toFixed(1)+'/'+(status.vram_total/1024).toFixed(0)+'GB';
-    } else {
-      document.getElementById('vram-txt').textContent = status.gpu_vendor !== 'unknown' ? 'GPU' : 'CPU';
+    const s = await r.json();
+    document.getElementById('gpu-name').textContent = s.gpu_name || 'CPU';
+    if(s.vram_total > 0) {
+      const pct = Math.round(s.vram_used / s.vram_total * 100);
+      document.getElementById('vfill').style.width = pct + '%';
     }
-    if (status.cwd) updateCwd(status.cwd);
-    renderModels(status.models||[], status.loaded_models||[], status.recommended||[]);
-    renderAgents(status.agents||[]);
-    const al = document.getElementById('alerts');
-    if (!status.ollama_ok) {
-      al.innerHTML = '<div class="alert warn">Ollama not running — start it with LAUNCH.bat or run: ollama serve</div>';
-    } else if (!(status.models||[]).length) {
-      al.innerHTML = '<div class="alert info">No models installed. Click a model to download one for your GPU.</div>';
-    } else { al.innerHTML = ''; }
   } catch(e) {}
 }
 
-// ─── RENDER MODELS ───────────────────────────────────────────────────────────
-function renderModels(models, loaded, recommended) {
-  const list = document.getElementById('model-list');
-  list.innerHTML = '';
-
-  if (models.length === 0 && recommended.length > 0) {
-    const rs = document.getElementById('rec-sec');
-    rs.style.display = 'block';
-    const rl = document.getElementById('rec-list');
-    rl.innerHTML = '';
-    recommended.slice(0, 5).forEach(m => {
-      const d = document.createElement('div');
-      d.className = 'm-item';
-      const gb = (m.vram/1024).toFixed(1);
-      d.innerHTML = `<div class="dot"></div><span>${m.name.split(':')[0]}</span>
-        <button class="pull-btn" onclick="pullModel('${m.name}')">↓${gb}GB</button>`;
-      rl.appendChild(d);
+// FILE TREE
+async function loadFileTree(path = '.') {
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message:`list files in ${path}`,history:[],intent:'agent',model:null,files:[]})
     });
-  } else {
-    document.getElementById('rec-sec').style.display = 'none';
-  }
-
-  models.forEach(m => {
-    const isLoaded = loaded.includes(m);
-    const isActive = m === currentModel;
-    const d = document.createElement('div');
-    d.className = 'm-item' + (isActive?' active':'') + (isLoaded?' loaded':'');
-    const short = m.replace(/:latest$/,'');
-    d.innerHTML = `<div class="dot"></div><span>${short}</span>`;
-    if (isLoaded) d.innerHTML += '<span class="m-vram" style="color:#22c55e">●</span>';
-    d.onclick = () => {
-      currentModel = m;
-      renderModels(models, loaded, recommended);
-    };
-    list.appendChild(d);
-  });
+    // Parse response to build tree
+    const tree = document.getElementById('file-tree');
+    tree.innerHTML = '<div class="file-item file selected" onclick="selectFile(this)">index.py</div>';
+  } catch(e) {}
 }
 
-// ─── RENDER AGENTS ───────────────────────────────────────────────────────────
-function renderAgents(agents) {
-  const list = document.getElementById('agent-list');
-  list.innerHTML = '';
-  agents.forEach(a => {
-    const d = document.createElement('div');
-    const active = a.id === currentIntent;
-    d.className = 'sk-item' + (active?' active-sk':'');
-    d.style.color = active ? a.color : '';
-    d.innerHTML = `<div class="dot" style="background:${active?a.color:'var(--br)'}"></div>${a.icon} ${a.name}`;
-    list.appendChild(d);
-  });
+function selectFile(el) {
+  document.querySelectorAll('.file-item').forEach(f => f.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedFile = el.textContent.trim().split(' ')[1] || el.textContent.trim();
+  if(currentTab === 1) loadFileInEditor(selectedFile);
 }
 
-// ─── INTENT PREVIEW (live as user types) ────────────────────────────────────
-function previewIntent(text) {
-  if (!text.trim()) return;
-  const t = text.toLowerCase();
-  let intent = 'chat', icon = '💬', name = 'Chat', color = '#6b7280';
-  if (/\b(code|script|python|javascript|function|debug|import|def |class |api|program)\b/.test(t))
-    { intent='code'; icon='💻'; name='Coder'; color='#3b82f6'; }
-  else if (/\b(blender|3d|mesh|bpy|geometry|render|animate|low.?poly|gltf|stl)\b/.test(t))
-    { intent='3d'; icon='🧊'; name='3D'; color='#f97316'; }
-  else if (/\b(research|analyze|explain|compare|summarize|what is|how does)\b/.test(t))
-    { intent='research'; icon='🔬'; name='Research'; color='#8b5cf6'; }
-  else if (/\b(calculate|math|equation|formula|solve|compute|derivative|integral)\b/.test(t))
-    { intent='math'; icon='🧮'; name='Math'; color='#06b6d4'; }
-  else if (/\b(write|essay|email|article|blog|document|report|draft|proofread)\b/.test(t))
-    { intent='write'; icon='✍️'; name='Writer'; color='#10b981'; }
-  else if (/\b(do |execute|run |install|download|automate|create file|open )\b/.test(t))
-    { intent='agent'; icon='🤖'; name='Agent'; color='#ec4899'; }
-
-  currentIntent = intent;
-  const badge = document.getElementById('agent-badge');
-  badge.style.borderColor = color; badge.style.color = color;
-  badge.style.background = color.replace(')', ',0.12)').replace('rgb', 'rgba');
-  document.getElementById('agent-icon').textContent = icon;
-  document.getElementById('agent-name').textContent = name;
+// EDITOR
+async function loadFileInEditor(filename) {
+  const editor = document.getElementById('code-editor');
+  editor.textContent = '// File: ' + filename + '\n// Loading...';
+  // In a real implementation, would fetch file content via API
 }
 
-// ─── FORMAT OUTPUT ───────────────────────────────────────────────────────────
-function fmt(text) {
-  // Code blocks first
-  text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
-    `<pre><code>${esc(code.trim())}</code></pre>`);
-  // Inline code
-  text = text.replace(/`([^`\n]+)`/g, (_, c) => `<code>${esc(c)}</code>`);
-  // Bold/italic
-  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  // Headings
-  text = text.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  text = text.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  text = text.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-  // Lists
-  text = text.replace(/^[*\-] (.+)$/gm, '<li>$1</li>');
-  text = text.replace(/(<li>.*<\/li>\n?)+/g, s => `<ul>${s}</ul>`);
-  // Newlines → br (but not inside pre)
-  text = text.replace(/(?<![>])\n(?!<)/g, '<br>');
-  return text;
-}
-function esc(t) {
-  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function saveFile() {
+  if(!selectedFile) return;
+  const content = document.getElementById('code-editor').textContent;
+  console.log('Saving', selectedFile, ':', content.length, 'bytes');
+  addTerminalLine(`Saved ${selectedFile}`, 'ok');
 }
 
-// CWD
-function updateCwd(path) {
-  currentCwd = path;
-  const el = document.getElementById('cwd-path');
-  if (el) {
-    // Show last 2 path segments for brevity
-    const parts = path.replace(/\\/g,'/').split('/').filter(Boolean);
-    el.textContent = parts.length > 2 ? '.../' + parts.slice(-2).join('/') : path;
-    el.title = path;
-  }
-}
-async function promptCwd() {
-  const path = prompt('Set project directory (full path):', currentCwd);
-  if (!path) return;
-  const r = await fetch('/api/cwd', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({path})
-  });
-  const d = await r.json();
-  if (d.ok) { updateCwd(d.cwd); addMsg('ai', fmt(`Project directory set to:\n\`${d.cwd}\``)); }
-  else addMsg('ai', `<span style="color:#ef4444">Error: ${esc(d.error)}</span>`);
+function closeFile() {
+  selectedFile = null;
+  document.getElementById('code-editor').textContent = '';
+  document.getElementById('editor-path').textContent = 'No file selected';
 }
 
 // MESSAGES
-function addMsg(role, html, meta) {
-  const msgs = document.getElementById('msgs');
-  const wrap = document.createElement('div');
-  wrap.className = 'msg ' + role;
-  const av = role === 'user' ? 'U' : (document.getElementById('agent-icon').textContent || 'AI');
-  wrap.innerHTML = `<div class="avatar">${av}</div><div class="cwrap">
-    <div class="bubble" id="${meta?.id||('b'+Date.now())}">${html}</div>
-    <div class="tools-wrap"></div>
-    ${meta?.label?`<div class="meta-line">${meta.label}</div>`:''}
-  </div>`;
-  msgs.appendChild(wrap);
-  msgs.scrollTop = msgs.scrollHeight;
-  return wrap;
-}
-
-// TOOL RENDERING
-let _currentToolEl = null;
-
-function renderToolCall(toolsWrap, info) {
-  const argsPreview = Object.entries(info.args||{})
-    .map(([k,v])=>typeof v==='string'?v.slice(0,60):JSON.stringify(v).slice(0,60))
-    .join(' ');
+function addMessage(role, text) {
+  const msgs = document.getElementById('messages');
   const div = document.createElement('div');
-  div.className = 'tool-step pending';
-  div.innerHTML = `<div class="tool-hdr" onclick="this.parentElement.classList.toggle('open')">
-    <span class="tool-ico">></span>
-    <span class="tool-nm">${esc(info.tool)}</span>
-    <span class="tool-ag">${esc(argsPreview)}</span>
-    <span class="tool-st">running</span>
-  </div><div class="tool-body"><pre></pre></div>`;
-  toolsWrap.appendChild(div);
-  _currentToolEl = div;
-  document.getElementById('msgs').scrollTop = 99999;
+  div.className = 'msg ' + role;
+  div.innerHTML = `
+    <div class="msg-avatar">${role==='user' ? 'U' : 'AI'}</div>
+    <div class="msg-content">
+      <div class="msg-bubble">${text}</div>
+    </div>
+  `;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
 }
 
-function renderToolResult(info) {
-  const div = _currentToolEl;
-  if (!div) return;
-  div.classList.remove('pending');
-  div.classList.add(info.ok ? 'ok' : 'err');
-  div.querySelector('.tool-st').textContent = info.ok ? 'done' : 'error';
-  div.querySelector('.tool-body pre').textContent = info.result || '';
-  _currentToolEl = null;
-  document.getElementById('msgs').scrollTop = 99999;
+function addPlan(step) {
+  const plans = document.getElementById('plans-view');
+  if(!plans.textContent.includes('Agent will show')) {
+    plans.innerHTML += `<div style="padding:8px;background:var(--s2);border-radius:4px;margin:4px 0;font-size:11px">${step}</div>`;
+  } else {
+    plans.innerHTML = `<div style="padding:8px;background:var(--s2);border-radius:4px;margin:4px 0;font-size:11px">${step}</div>`;
+  }
 }
 
-// FILE HANDLING
-function handleFiles(fileList) {
-  Array.from(fileList).slice(0, 5 - attachedFiles.length).forEach(file => {
-    const reader = new FileReader();
-    reader.onload = e => { attachedFiles.push({name:file.name,type:file.type,data:e.target.result}); renderChips(); };
-    reader.readAsDataURL(file);
-  });
-  document.getElementById('file-input').value = '';
-}
-function renderChips() {
-  const el = document.getElementById('file-chips');
-  el.innerHTML = '';
-  attachedFiles.forEach((f,i) => {
-    const isImg = f.type.startsWith('image/');
-    const c = document.createElement('div');
-    c.className = 'chip' + (isImg?' img':'');
-    c.innerHTML = `${isImg?'[img]':'[f]'} ${esc(f.name)} <span class="rm" onclick="removeFile(${i})">x</span>`;
-    el.appendChild(c);
-  });
-}
-function removeFile(i) { attachedFiles.splice(i,1); renderChips(); }
-
-// DRAG & DROP anywhere
-document.body.addEventListener('dragover', e => { e.preventDefault(); document.getElementById('inp').style.borderColor='var(--c)'; });
-document.body.addEventListener('dragleave', e => { if(!e.relatedTarget) document.getElementById('inp').style.borderColor=''; });
-document.body.addEventListener('drop', e => { e.preventDefault(); document.getElementById('inp').style.borderColor=''; if(e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); });
-
-// FORMAT
-function fmt(text) {
-  text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_,lang,code) => `<pre><code>${esc(code.trim())}</code></pre>`);
-  text = text.replace(/`([^`\n]+)`/g, (_,c) => `<code>${esc(c)}</code>`);
-  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  text = text.replace(/^### (.+)$/gm,'<h3>$1</h3>');
-  text = text.replace(/^## (.+)$/gm,'<h2>$1</h2>');
-  text = text.replace(/^# (.+)$/gm,'<h1>$1</h1>');
-  text = text.replace(/^[*\-] (.+)$/gm,'<li>$1</li>');
-  text = text.replace(/(<li>.*<\/li>\n?)+/g, s=>`<ul>${s}</ul>`);
-  text = text.replace(/(?<![>])\n(?!<)/g,'<br>');
-  return text;
-}
-function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-// INTENT PREVIEW
-function previewIntent(text) {
-  if (!text.trim()) return;
-  const t = text.toLowerCase();
-  let intent='chat',icon='AI',name='Chat',color='#6b7280';
-  if(/\b(code|script|python|javascript|function|debug|def |class |api|fix|error)\b/.test(t)) {intent='code';icon='{}';name='Coder';color='#3b82f6';}
-  else if(/\b(blender|3d|mesh|bpy|render|animate|gltf|stl|geometry)\b/.test(t)) {intent='3d';icon='3D';name='3D';color='#f97316';}
-  else if(/\b(research|analyze|explain|compare|summarize|what is|how does)\b/.test(t)) {intent='research';icon='R';name='Research';color='#8b5cf6';}
-  else if(/\b(calculate|math|equation|formula|solve|compute)\b/.test(t)) {intent='math';icon='=';name='Math';color='#06b6d4';}
-  else if(/\b(write|essay|email|article|blog|document|draft|proofread)\b/.test(t)) {intent='write';icon='W';name='Writer';color='#10b981';}
-  else if(/\b(do |run |install|automate|create file|edit file|open |execute|agent)\b/.test(t)) {intent='agent';icon='>>',name='Agent';color='#ec4899';}
-  currentIntent = intent;
-  const badge = document.getElementById('agent-badge');
-  badge.style.borderColor=color; badge.style.color=color;
-  document.getElementById('agent-icon').textContent=icon;
-  document.getElementById('agent-name').textContent=name;
+function addTerminalLine(text, type='') {
+  const term = document.getElementById('terminal');
+  const line = document.createElement('div');
+  line.className = 'terminal-line ' + type;
+  line.textContent = text;
+  term.appendChild(line);
+  term.scrollTop = term.scrollHeight;
 }
 
-// SEND
-async function send() {
-  if (streaming) return;
+function clearTerminal() {
+  document.getElementById('terminal').innerHTML = '';
+}
+
+// CHAT
+async function sendMessage() {
   const inp = document.getElementById('inp');
   const text = inp.value.trim();
-  if (!text && !attachedFiles.length) return;
+  if(!text) return;
 
-  const filesToSend = [...attachedFiles];
-  attachedFiles = []; renderChips();
-  inp.value = ''; resize(inp);
+  // Handle slash commands
+  if(text.startsWith('/')) {
+    handleSlashCommand(text);
+    inp.value = '';
+    return;
+  }
+
   streaming = true;
   document.getElementById('send-btn').disabled = true;
-
-  let userHtml = text ? esc(text) : '';
-  if (filesToSend.length) {
-    const chips = filesToSend.map(f=>`<span class="chip${f.type.startsWith('image/')?' img':''}" style="display:inline-flex">[${f.type.startsWith('image/')?'img':'f'}] ${esc(f.name)}</span>`).join(' ');
-    userHtml = (userHtml?userHtml+'<br>':'') + chips;
-  }
-  addMsg('user', userHtml||'(files)');
-  history.push({role:'user', content: text||'(files attached)'});
-
-  const aiWrap = addMsg('ai', '<div class="typing"><span></span><span></span><span></span></div>');
-  const bubble = aiWrap.querySelector('.bubble');
-  const toolsWrap = aiWrap.querySelector('.tools-wrap');
-  _currentToolEl = null;
-
-  let full='', metaLabel='';
+  addMessage('user', text);
+  inp.value = '';
+  inp.style.height = 'auto';
 
   try {
-    const resp = await fetch('/api/chat', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({message:text||'Analyze attached files.',history:history.slice(-10),model:currentModel||null,intent:currentIntent||'chat',files:filesToSend})
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message:text,history:history.slice(-10),intent:currentIntent,model:currentModel||null,files:[]})
     });
-    if (!resp.ok) throw new Error('HTTP '+resp.status);
 
-    const reader = resp.body.getReader();
+    const reader = res.body.getReader();
     const dec = new TextDecoder();
-    let buf = '';
+    let buf = '', full = '';
 
-    outer: while (true) {
+    while(true) {
       const {done, value} = await reader.read();
-      if (done) break;
+      if(done) break;
       buf += dec.decode(value, {stream:true});
       const lines = buf.split('\n');
       buf = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6).trimEnd();
-        if (data === '[DONE]') break outer;
-        if (data.startsWith('{')) {
+
+      for(const line of lines) {
+        if(!line.startsWith('data: ')) continue;
+        const data = line.slice(6);
+        if(data === '[DONE]') break;
+        if(data.startsWith('{')) {
           try {
             const ev = JSON.parse(data);
-            if (ev.type === 'meta') {
-              currentIntent=ev.intent||'chat'; currentModel=ev.model||currentModel;
-              const badge=document.getElementById('agent-badge');
-              badge.style.borderColor=ev.color; badge.style.color=ev.color;
-              document.getElementById('agent-icon').textContent=ev.icon;
-              document.getElementById('agent-name').textContent=ev.agent;
-              document.getElementById('model-tag').textContent=ev.model||'';
-              metaLabel=`${ev.model} · ${ev.agent}`;
+            if(ev.type === 'meta') {
+              currentIntent = ev.intent || 'chat';
+              currentModel = ev.model || currentModel;
+              document.getElementById('agent-name').textContent = ev.agent || 'Chat';
               continue;
             }
-            if (ev.type === 'tool_call') { renderToolCall(toolsWrap, ev); continue; }
-            if (ev.type === 'tool_result') { renderToolResult(ev); continue; }
-            if (ev.type === 'cwd') { updateCwd(ev.path); continue; }
+            if(ev.type === 'tool_call') {
+              addTerminalLine('→ ' + ev.tool + '(...)', 'tool');
+              continue;
+            }
+            if(ev.type === 'tool_result') {
+              addTerminalLine('✓ ' + ev.tool, ev.ok ? 'ok' : 'err');
+              continue;
+            }
           } catch(e) {}
         }
-        const token = data.replace(/\\n/g,'\n');
+        const token = data.replace(/\\n/g, '\n');
         full += token;
-        bubble.innerHTML = fmt(full)+'<span class="typing" style="display:inline"><span></span></span>';
-        document.getElementById('msgs').scrollTop = 99999;
       }
     }
-    bubble.innerHTML = fmt(full);
-    if (metaLabel) {
-      const ml = document.createElement('div');
-      ml.className = 'meta-line'; ml.textContent = metaLabel;
-      aiWrap.querySelector('.cwrap').appendChild(ml);
-    }
-    history.push({role:'assistant', content:full});
+
+    if(full) addMessage('ai', full.replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+    history.push({role:'user',content:text}, {role:'assistant',content:full});
   } catch(e) {
-    bubble.innerHTML = `<span style="color:#ef4444">Error: ${esc(e.message)}</span>`;
+    addMessage('ai', 'Error: ' + e.message);
   }
+
   streaming = false;
   document.getElementById('send-btn').disabled = false;
-  document.getElementById('msgs').scrollTop = 99999;
 }
 
-// PULL MODEL
-async function pullModel(name) {
-  await fetch('/api/pull',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:name})});
-  addMsg('ai', fmt(`Downloading **${name}** in background... it will appear in the sidebar when ready.`));
+function handleSlashCommand(cmd) {
+  const parts = cmd.split(' ');
+  const c = parts[0].slice(1);
+  switch(c) {
+    case 'new':
+      selectedFile = parts[1] || 'untitled.py';
+      switchTab(1);
+      document.getElementById('editor-path').textContent = selectedFile;
+      document.getElementById('code-editor').textContent = '# ' + selectedFile + '\n\n';
+      addTerminalLine('Created ' + selectedFile);
+      break;
+    case 'save':
+      saveFile();
+      break;
+    case 'run':
+      const cmd_str = parts.slice(1).join(' ') || 'python main.py';
+      addTerminalLine('$ ' + cmd_str);
+      // Would execute via API
+      break;
+    case 'clear':
+      clearTerminal();
+      break;
+    case 'help':
+      addTerminalLine('/new <file>  - Create new file');
+      addTerminalLine('/save        - Save current file');
+      addTerminalLine('/run <cmd>   - Run command');
+      addTerminalLine('/clear       - Clear terminal');
+      break;
+    default:
+      addTerminalLine('Unknown command: ' + c);
+  }
 }
-
-// SIDEBAR RENDERS
-function renderModels(models, loaded, recommended) {
-  const list = document.getElementById('model-list');
-  list.innerHTML = '';
-  if (!models.length && recommended.length) {
-    document.getElementById('rec-sec').style.display='block';
-    const rl = document.getElementById('rec-list');
-    rl.innerHTML = '';
-    recommended.slice(0,5).forEach(m => {
-      const d=document.createElement('div'); d.className='m-item';
-      const gb=(m.vram/1024).toFixed(1);
-      d.innerHTML=`<div class="dot"></div><span>${m.name.split(':')[0]}</span><button class="pull-btn" onclick="pullModel('${m.name}')">get ${gb}GB</button>`;
-      rl.appendChild(d);
-    });
-  } else { document.getElementById('rec-sec').style.display='none'; }
-  models.forEach(m => {
-    const isLoaded=loaded.includes(m), isActive=m===currentModel;
-    const d=document.createElement('div');
-    d.className='m-item'+(isActive?' active':'')+(isLoaded?' loaded':'');
-    const short=m.replace(/:latest$/,'');
-    d.innerHTML=`<div class="dot"></div><span title="${m}">${short}</span>`;
-    if(isLoaded) d.innerHTML+='<span class="m-vram" style="color:#22c55e">●</span>';
-    d.onclick=()=>{ currentModel=m; renderModels(models,loaded,recommended); };
-    list.appendChild(d);
-  });
-}
-function renderAgents(agents) {
-  const list = document.getElementById('agent-list');
-  list.innerHTML = '';
-  agents.forEach(a => {
-    const active=a.id===currentIntent;
-    const d=document.createElement('div');
-    d.className='sk-item'+(active?' active-sk':'');
-    d.style.color=active?a.color:'';
-    d.innerHTML=`<div class="dot" style="background:${active?a.color:'var(--br)'}"></div>${a.icon} ${a.name}`;
-    d.onclick=()=>{ currentIntent=a.id; renderAgents(agents); const inp=document.getElementById('inp'); inp.focus(); };
-    list.appendChild(d);
-  });
-}
-
-// QUICK ACTIONS
-function renderQA() {
-  const qa=document.getElementById('qa');
-  QUICK.forEach(q=>{
-    const b=document.createElement('button');
-    b.className='q-btn'; b.textContent=q.l;
-    b.onclick=()=>{ const inp=document.getElementById('inp'); inp.value=q.p; inp.focus(); resize(inp); previewIntent(q.p); };
-    qa.appendChild(b);
-  });
-}
-
-function resize(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
 
 // INIT
-document.getElementById('inp').addEventListener('input',function(){ resize(this); previewIntent(this.value); });
-document.getElementById('inp').addEventListener('keydown',function(e){ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();} });
+document.getElementById('inp').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+});
+document.getElementById('inp').addEventListener('keydown', function(e) {
+  if(e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
 
-renderQA();
 updateStatus();
+loadFileTree();
 setInterval(updateStatus, 5000);
 
-// ─── UPDATES TAB ─────────────────────────────────────────────────────────
-async function showUpdatesTab() {
-  const panel = document.getElementById('update-panel');
-  panel.style.display = 'block';
-  const statusDiv = document.getElementById('update-status');
-  statusDiv.innerHTML = '<div class="update-item">Checking for new models...</div>';
-
-  try {
-    // Get update status
-    const res = await fetch('/api/update-status');
-    const data = await res.json();
-
-    let html = '';
-
-    // Show discovered models
-    if (data.discovered_count > 0) {
-      html += `<div class="update-item ok">📦 ${data.discovered_count} new models found</div>`;
-    }
-
-    // Show recent swaps
-    if (data.recent_swaps && data.recent_swaps.length > 0) {
-      html += `<div class="update-item">📊 Recent upgrades:</div>`;
-      data.recent_swaps.forEach(s => {
-        html += `<div style="font-size:9px;margin-left:8px;color:#888">${s.old_model.split(':')[0]} → ${s.new_model.split(':')[0]}</div>`;
-      });
-    }
-
-    // Show skills
-    if (data.available_skills && data.available_skills.length > 0) {
-      html += `<div class="update-item">⚙️ ${data.available_skills.length} skills available</div>`;
-    }
-
-    html += `<div style="margin-top:8px;font-size:9px;color:#666">Last checked: ${data.last_checked || 'Never'}</div>`;
-    statusDiv.innerHTML = html || '<div class="update-item warn">No updates available</div>';
-  } catch(e) {
-    statusDiv.innerHTML = `<div class="update-item">Error: ${e.message}</div>`;
-  }
-}
-
-async function benchmarkAndSwap(oldModel, newModel) {
-  const inp = document.getElementById('inp');
-  inp.value = `Compare and swap: ${oldModel} → ${newModel}`;
-
-  addMsg('ai', 'Starting benchmark comparison... This may take a minute.');
-
-  try {
-    const res = await fetch('/api/compare-models', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({old_model: oldModel, new_model: newModel})
-    });
-    const result = await res.json();
-
-    if (result.recommend_swap) {
-      addMsg('ai', fmt(`✅ **New model is ${result.delta_percent}% better!**\n\nOld: ${result.old_score}/100\nNew: ${result.new_score}/100\n\nRecommend swap to \`${newModel}\``));
-
-      // Auto-swap
-      const swapRes = await fetch('/api/swap-model', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({old_model: oldModel, new_model: newModel, intent: 'auto'})
-      });
-      const swapResult = await swapRes.json();
-      if (swapResult.ok) {
-        addMsg('ai', `✅ Swapped! ${swapResult.message}`);
-      }
-    } else {
-      addMsg('ai', fmt(`Current model still better.\n\nOld: ${result.old_score}/100\nNew: ${result.new_score}/100`));
-    }
-  } catch(e) {
-    addMsg('ai', `Error: ${e.message}`);
-  }
-}
+// Quick message for demo
+addTerminalLine('[CrimsonWell] Ready. Type /help for commands.', 'ok');
 </script>
 </body>
-</html>"""
+</html>
+
+"""
 
 # ─── STARTUP ──────────────────────────────────────────────────────────────────
 
