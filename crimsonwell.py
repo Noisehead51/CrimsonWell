@@ -335,57 +335,70 @@ def execute_tool(tool_name: str, args: dict) -> str:
             if not url.startswith(("http://", "https://")):
                 return "[ERROR] Only http/https URLs"
             try:
+                # Use Jina Reader API (free, no key needed) - converts webpage to clean markdown
+                jina_url = f"https://r.jina.ai/{url}"
                 req = urllib.request.Request(
-                    url,
-                    headers={"User-Agent": "CrimsonWell/1.0 (local AI assistant)"}
+                    jina_url,
+                    headers={"User-Agent": "CrimsonWell/1.0"}
                 )
                 with urllib.request.urlopen(req, timeout=15) as r:
                     content = r.read(100000).decode("utf-8", errors="replace")
-                return content[:8000]
-            except urllib.error.HTTPError as e:
-                return f"[HTTP {e.code}] {e.reason}"
-            except Exception as e:
-                return f"[ERROR] {str(e)[:200]}"
+                return content[:8000] if content else "[Empty page]"
+            except:
+                try:
+                    # Fallback: direct fetch
+                    req = urllib.request.Request(
+                        url,
+                        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as r:
+                        html = r.read(100000).decode("utf-8", errors="replace")
+                    # Strip HTML tags
+                    import re
+                    text = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL)
+                    text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL)
+                    text = re.sub(r'<[^>]+>', '\n', text)
+                    text = re.sub(r'\n\s*\n', '\n', text).strip()
+                    return text[:8000] if text else "[No readable content]"
+                except Exception as e:
+                    return f"[Cannot fetch {url}] {str(e)[:100]}"
 
         elif tool_name == "web_search":
             query = args.get("query", "").strip()
             if not query:
                 return "[ERROR] query is required"
             try:
-                # Use Google's search (via text-only endpoint)
-                search_url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
+                # Use Jina Reader API for web search (free, no key needed)
+                search_url = f"https://s.jina.ai/{urllib.parse.quote(query)}"
                 req = urllib.request.Request(
                     search_url,
-                    headers={
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                    }
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
                 )
                 with urllib.request.urlopen(req, timeout=15) as r:
-                    html = r.read(100000).decode("utf-8", errors="replace")
+                    content = r.read(50000).decode("utf-8", errors="replace")
 
-                # Extract search results from Google HTML
-                import re
-                # Look for result titles and snippets
-                results = []
-                # Google search result pattern
-                snippets = re.findall(r'<h3[^>]*>.*?<a[^>]*href="([^"]*)"[^>]*>([^<]+)</a>.*?</h3>.*?<div[^>]*class="[^"]*VwiC3b[^"]*"[^>]*>([^<]+)<', html, re.DOTALL)
+                # Jina returns markdown - just return it
+                if content and len(content) > 50:
+                    return content[:2000]
 
-                if not snippets:
-                    # Fallback: just extract any links with text
-                    snippets = re.findall(r'<a[^>]*href="([^"]*)"[^>]*>([^<]+)</a>', html)[:5]
-
-                for item in snippets[:5]:
-                    if len(item) >= 2:
-                        url = item[0] if len(item) > 0 else ""
-                        title = item[1] if len(item) > 1 else ""
-                        snippet = item[2] if len(item) > 2 else ""
-                        if url and not any(x in url.lower() for x in ['google', 'javascript:', 'webcache']):
-                            text = f"• {title}\n  {snippet if snippet else url}"
-                            results.append(text)
-
-                return "\n".join(results[:3]) if results else "(search returned no results - try rephrasing)"
-            except Exception as e:
-                return f"[Search unavailable] Model should answer based on training data. Error: {str(e)[:100]}"
+                # Fallback to SerpAPI if needed (free tier works)
+                raise Exception("Jina search failed, trying alternative")
+            except:
+                try:
+                    # Use metasearch API (free, no key)
+                    search_url = f"https://api.search.brave.com/res/v1/web/search?q={urllib.parse.quote(query)}"
+                    req = urllib.request.Request(
+                        search_url,
+                        headers={"User-Agent": "CrimsonWell/1.0", "Accept": "application/json"}
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as r:
+                        result = json.loads(r.read().decode())
+                        results = []
+                        for item in result.get("web", [])[:5]:
+                            results.append(f"• {item.get('title', 'Untitled')}\n  {item.get('description', item.get('url', ''))}\n  {item.get('url', '')}")
+                        return "\n".join(results) if results else "(no results)"
+                except:
+                    return f"[REAL-TIME SEARCH] Unable to reach search APIs. Answer based on your training data from early 2023, but note the current date is {_session.get('current_date', 'March 25, 2026')}."
 
         elif tool_name == "get_system_info":
             try:
