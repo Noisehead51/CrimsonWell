@@ -39,6 +39,10 @@ try:
         discover_skills, validate_skill, get_update_status
     )
     from core.model_selector import select_model, set_speed_preference
+    from core.skill_manager import (
+        scan_local_skills, download_skill, load_skill, run_skill,
+        list_skills, enable_skill, disable_skill, get_community_skills
+    )
     _CORE_OK = True
 except ImportError as e:
     print(f"[warn] Core module import failed: {e} — using built-in fallbacks")
@@ -889,6 +893,55 @@ class Handler(http.server.BaseHTTPRequestHandler):
             try:
                 set_speed_preference(pref)
                 self._json({"ok": True, "preference": pref})
+            except Exception as e:
+                self._json({"error": str(e)}, 500)
+
+        elif self.path == "/api/skills":
+            # List all skills
+            skills = list_skills()
+            self._json(skills)
+
+        elif self.path == "/api/skills/scan":
+            # Scan and register local skills
+            found = scan_local_skills()
+            self._json({"found": len(found), "skills": found})
+
+        elif self.path == "/api/skills/community":
+            # List recommended community skills
+            community = get_community_skills()
+            self._json({"skills": community})
+
+        elif self.path == "/api/skills/download":
+            # Download and install a community skill
+            url = body.get("url", "").strip()
+            name = body.get("name", "").strip()
+            if not url or not name:
+                self._json({"error": "url and name required"}, 400)
+                return
+            result = download_skill(url, name)
+            self._json(result)
+
+        elif self.path == "/api/skills/enable":
+            # Enable a skill
+            name = body.get("skill", "").strip()
+            if not name:
+                self._json({"error": "skill name required"}, 400)
+                return
+            try:
+                enable_skill(name)
+                self._json({"ok": True, "message": f"Enabled {name}"})
+            except Exception as e:
+                self._json({"error": str(e)}, 500)
+
+        elif self.path == "/api/skills/disable":
+            # Disable a skill
+            name = body.get("skill", "").strip()
+            if not name:
+                self._json({"error": "skill name required"}, 400)
+                return
+            try:
+                disable_skill(name)
+                self._json({"ok": True, "message": f"Disabled {name}"})
             except Exception as e:
                 self._json({"error": str(e)}, 500)
 
