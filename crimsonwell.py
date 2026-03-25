@@ -352,24 +352,40 @@ def execute_tool(tool_name: str, args: dict) -> str:
             if not query:
                 return "[ERROR] query is required"
             try:
-                # Use DuckDuckGo's simple search (no API key needed)
-                search_url = f"https://duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+                # Use Google's search (via text-only endpoint)
+                search_url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
                 req = urllib.request.Request(
                     search_url,
-                    headers={"User-Agent": "CrimsonWell/1.0 (local AI assistant)"}
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    }
                 )
                 with urllib.request.urlopen(req, timeout=15) as r:
-                    html = r.read(50000).decode("utf-8", errors="replace")
-                # Extract title tags (DDG result titles)
+                    html = r.read(100000).decode("utf-8", errors="replace")
+
+                # Extract search results from Google HTML
                 import re
-                titles = re.findall(r'<a[^>]*href="([^"]*)"[^>]*title="([^"]*)"', html)
+                # Look for result titles and snippets
                 results = []
-                for url, title in titles[:5]:
-                    if url and title and not url.startswith('javascript:'):
-                        results.append(f"• {title}\n  {url}")
-                return "\n".join(results) if results else "(no results found)"
+                # Google search result pattern
+                snippets = re.findall(r'<h3[^>]*>.*?<a[^>]*href="([^"]*)"[^>]*>([^<]+)</a>.*?</h3>.*?<div[^>]*class="[^"]*VwiC3b[^"]*"[^>]*>([^<]+)<', html, re.DOTALL)
+
+                if not snippets:
+                    # Fallback: just extract any links with text
+                    snippets = re.findall(r'<a[^>]*href="([^"]*)"[^>]*>([^<]+)</a>', html)[:5]
+
+                for item in snippets[:5]:
+                    if len(item) >= 2:
+                        url = item[0] if len(item) > 0 else ""
+                        title = item[1] if len(item) > 1 else ""
+                        snippet = item[2] if len(item) > 2 else ""
+                        if url and not any(x in url.lower() for x in ['google', 'javascript:', 'webcache']):
+                            text = f"• {title}\n  {snippet if snippet else url}"
+                            results.append(text)
+
+                return "\n".join(results[:3]) if results else "(search returned no results - try rephrasing)"
             except Exception as e:
-                return f"[ERROR] {str(e)[:200]}"
+                return f"[Search unavailable] Model should answer based on training data. Error: {str(e)[:100]}"
 
         elif tool_name == "get_system_info":
             try:
