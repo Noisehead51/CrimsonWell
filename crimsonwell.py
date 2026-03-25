@@ -43,6 +43,9 @@ try:
         scan_local_skills, download_skill, load_skill, run_skill,
         list_skills, enable_skill, disable_skill, get_community_skills
     )
+    from core.auto_benchmark import (
+        start_scheduler, stop_scheduler, get_scheduler_status, set_scheduler_config
+    )
     _CORE_OK = True
 except ImportError as e:
     print(f"[warn] Core module import failed: {e} — using built-in fallbacks")
@@ -945,6 +948,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except Exception as e:
                 self._json({"error": str(e)}, 500)
 
+        elif self.path == "/api/scheduler/start":
+            # Start auto-benchmark scheduler
+            result = start_scheduler()
+            self._json(result)
+
+        elif self.path == "/api/scheduler/stop":
+            # Stop scheduler
+            result = stop_scheduler()
+            self._json(result)
+
+        elif self.path == "/api/scheduler/status":
+            # Get scheduler status
+            status = get_scheduler_status()
+            self._json(status)
+
+        elif self.path == "/api/scheduler/config":
+            # Update scheduler config
+            config = body.get("config", {})
+            result = set_scheduler_config(config)
+            self._json(result)
+
         elif self.path == "/api/agent":
             # Kick off an autonomous agent task (uses agent_engine if available)
             task  = body.get("task", "").strip()
@@ -1689,12 +1713,23 @@ def start():
         print("  [!] Ollama not detected. Run LAUNCH.bat or: ollama serve")
         print()
 
+    # Start background scheduler for model benchmarking
+    try:
+        start_scheduler()
+        print("  ✓ Auto-benchmark scheduler started")
+    except Exception as e:
+        print(f"  [!] Scheduler failed to start: {e}")
+
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.ThreadingTCPServer(("", PORT), Handler) as srv:
         try:
             srv.serve_forever()
         except KeyboardInterrupt:
             print("\n  CrimsonWell stopped.")
+            try:
+                stop_scheduler()
+            except:
+                pass
 
 
 if __name__ == "__main__":
