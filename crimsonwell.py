@@ -718,6 +718,29 @@ def stream_chat(message: str, history: list, model_override: str | None, files: 
     except Exception as e:
         yield f'data: [Error: {e}]\n\n'
 
+    # Check for [SEARCH: ...] or [FETCH: ...] in response
+    full_text = "".join(full_response)
+
+    # Look for [SEARCH: query]
+    search_match = re.search(r'\[SEARCH:\s*([^\]]+)\]', full_text)
+    if search_match:
+        query = search_match.group(1).strip()
+        try:
+            result = execute_tool("web_search", {"query": query})
+            yield f'data: \n\n[Web Search for "{query}"]\n{result}\n\n'
+        except:
+            pass
+
+    # Look for [FETCH: url]
+    fetch_match = re.search(r'\[FETCH:\s*([^\]]+)\]', full_text)
+    if fetch_match:
+        url = fetch_match.group(1).strip()
+        try:
+            result = execute_tool("fetch_url", {"url": url})
+            yield f'data: \n\n[Fetched: {url}]\n{result[:1000]}\n\n'
+        except:
+            pass
+
     # Log usage
     record_usage(intent, model)
     yield "data: [DONE]\n\n"

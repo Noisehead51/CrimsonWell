@@ -146,10 +146,13 @@ AGENTS = {
         "color": "#6b7280",
         "keywords": [],
         "system": (
-            "You are a helpful, knowledgeable AI assistant. "
-            "Give clear, direct answers. Be conversational but informative. "
-            "If the user seems to need a specific skill (coding, research, etc.), "
-            "switch naturally to that mode in your response."
+            "You are a helpful, knowledgeable AI assistant. Give clear, direct answers. "
+            "Be conversational but informative. If the user needs a specific skill (coding, research, etc.), "
+            "switch naturally to that mode. "
+            "You have internet access. When a user asks for current/recent information, web links, "
+            "or facts that might have changed, start your response with [SEARCH: your search query] "
+            "on its own line, then provide your analysis. Example: [SEARCH: latest AI news 2026]\n"
+            "You can also [FETCH: URL] to read specific webpages. Use sparingly."
         ),
     },
 }
