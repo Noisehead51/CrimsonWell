@@ -72,7 +72,7 @@ def select_model(
         "math": ["deepseek-r1:8b", "llama3.1:8b", "mistral:7b"],
         "write": ["mistral:7b", "qwen3.5:4b", "qwen2.5:9b"],
         "agent": ["mistral:7b", "qwen3.5:4b", "llama3.1:8b"],
-        "chat": ["qwen3.5:4b", "mistral:7b", "qwen2.5:9b"],
+        "chat": ["mistral:7b", "qwen3.5:4b", "qwen2.5:9b"],
         "system": ["mistral:7b", "qwen3.5:4b"],
     }
 
